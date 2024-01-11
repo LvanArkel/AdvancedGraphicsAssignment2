@@ -14,13 +14,14 @@ TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
 // triangle count
 #define N	64
+#define NS  2
 
 // forward declarations
-void Subdivide( uint nodeIdx );
-void UpdateNodeBounds( uint nodeIdx );
 
 // minimal structs
+struct Sphere { float3 origin; float radius; };
 struct Tri { float3 vertex0, vertex1, vertex2; float3 centroid; };
+struct DiffuseMat { float3 albedo; };
 __declspec(align(32)) struct BVHNode
 {
 	float3 aabbMin, aabbMax;
@@ -31,9 +32,10 @@ struct Ray { float3 O, D; float t = 1e30f; };
 
 // application data
 Tri tri[N];
-uint triIdx[N];
-BVHNode bvhNode[N * 2];
-uint rootNodeIdx = 0, nodesUsed = 1;
+DiffuseMat diffuseMaterials[N];
+
+Sphere spheres[NS];
+DiffuseMat sphereMaterials[NS];
 
 // functions
 
@@ -55,104 +57,45 @@ void IntersectTri( Ray& ray, const Tri& tri )
 	if (t > 0.0001f) ray.t = min( ray.t, t );
 }
 
-bool IntersectAABB( const Ray& ray, const float3 bmin, const float3 bmax )
-{
-	float tx1 = (bmin.x - ray.O.x) / ray.D.x, tx2 = (bmax.x - ray.O.x) / ray.D.x;
-	float tmin = min( tx1, tx2 ), tmax = max( tx1, tx2 );
-	float ty1 = (bmin.y - ray.O.y) / ray.D.y, ty2 = (bmax.y - ray.O.y) / ray.D.y;
-	tmin = max( tmin, min( ty1, ty2 ) ), tmax = min( tmax, max( ty1, ty2 ) );
-	float tz1 = (bmin.z - ray.O.z) / ray.D.z, tz2 = (bmax.z - ray.O.z) / ray.D.z;
-	tmin = max( tmin, min( tz1, tz2 ) ), tmax = min( tmax, max( tz1, tz2 ) );
-	return tmax >= tmin && tmin < ray.t && tmax > 0;
-}
-
-void IntersectBVH( Ray& ray, const uint nodeIdx )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	if (!IntersectAABB( ray, node.aabbMin, node.aabbMax )) return;
-	if (node.isLeaf())
-	{
-		for (uint i = 0; i < node.triCount; i++ )
-			IntersectTri( ray, tri[triIdx[node.leftFirst + i]] );
-	}
-	else
-	{
-		IntersectBVH( ray, node.leftFirst );
-		IntersectBVH( ray, node.leftFirst + 1 );
+void IntersectSphere(Ray& ray, const Sphere& sphere) {
+	float3 oc = ray.O - sphere.origin;
+	float b = dot(oc, ray.D);
+	float c = dot(oc, oc) - sphere.radius * sphere.radius;
+	float h = b * b - c;
+	if (h > 0.0f) {
+		h = sqrt(h);
+		ray.t = min(ray.t, -b - h);
 	}
 }
 
-void BuildBVH()
-{
-	// populate triangle index array
-	for (int i = 0; i < N; i++) triIdx[i] = i;
-	// calculate triangle centroids for partitioning
-	for (int i = 0; i < N; i++)
-		tri[i].centroid = (tri[i].vertex0 + tri[i].vertex1 + tri[i].vertex2) * 0.3333f;
-	// assign all triangles to root node
-	BVHNode& root = bvhNode[rootNodeIdx];
-	root.leftFirst = 0, root.triCount = N;
-	UpdateNodeBounds( rootNodeIdx );
-	// subdivide recursively
-	Subdivide( rootNodeIdx );
-}
-
-void UpdateNodeBounds( uint nodeIdx )
-{
-	BVHNode& node = bvhNode[nodeIdx];
-	node.aabbMin = float3( 1e30f );
-	node.aabbMax = float3( -1e30f );
-	for (uint first = node.leftFirst, i = 0; i < node.triCount; i++)
-	{
-		uint leafTriIdx = triIdx[first + i];
-		Tri& leafTri = tri[leafTriIdx];
-		node.aabbMin = fminf( node.aabbMin, leafTri.vertex0 ),
-		node.aabbMin = fminf( node.aabbMin, leafTri.vertex1 ),
-		node.aabbMin = fminf( node.aabbMin, leafTri.vertex2 ),
-		node.aabbMax = fmaxf( node.aabbMax, leafTri.vertex0 ),
-		node.aabbMax = fmaxf( node.aabbMax, leafTri.vertex1 ),
-		node.aabbMax = fmaxf( node.aabbMax, leafTri.vertex2 );
+float3 Color(Ray& ray) {
+	int lastIntersect = -1;
+	bool checkSpheres = false;
+	for (int i = 0; i < N; i++) { 
+		float lastT = ray.t;
+		IntersectTri(ray, tri[i]);
+		if (lastT != ray.t) {
+			lastIntersect = i;
+		}
 	}
-}
-
-void Subdivide( uint nodeIdx )
-{
-	// terminate recursion
-	BVHNode& node = bvhNode[nodeIdx];
-	if (node.triCount <= 2) return;
-	// determine split axis and position
-	float3 extent = node.aabbMax - node.aabbMin;
-	int axis = 0;
-	if (extent.y > extent.x) axis = 1;
-	if (extent.z > extent[axis]) axis = 2;
-	float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
-	// in-place partition
-	int i = node.leftFirst;
-	int j = i + node.triCount - 1;
-	while (i <= j)
-	{
-		if (tri[triIdx[i]].centroid[axis] < splitPos)
-			i++;
-		else
-			swap( triIdx[i], triIdx[j--] );
+	for (int i = 0; i < NS; i++) {
+		float lastT = ray.t;
+		IntersectSphere(ray, spheres[i]);
+		if (lastT != ray.t) {
+			lastIntersect = i;
+			checkSpheres = true;
+		}
 	}
-	// abort split if one of the sides is empty
-	int leftCount = i - node.leftFirst;
-	if (leftCount == 0 || leftCount == node.triCount) return;
-	// create child nodes
-	int leftChildIdx = nodesUsed++;
-	int rightChildIdx = nodesUsed++;
-	bvhNode[leftChildIdx].leftFirst = node.leftFirst;
-	bvhNode[leftChildIdx].triCount = leftCount;
-	bvhNode[rightChildIdx].leftFirst = i;
-	bvhNode[rightChildIdx].triCount = node.triCount - leftCount;
-	node.leftFirst = leftChildIdx;
-	node.triCount = 0;
-	UpdateNodeBounds( leftChildIdx );
-	UpdateNodeBounds( rightChildIdx );
-	// recurse
-	Subdivide( leftChildIdx );
-	Subdivide( rightChildIdx );
+	if (ray.t < 1e30f) {
+		if (checkSpheres) {
+			return sphereMaterials[lastIntersect].albedo;
+		} else {
+			return diffuseMaterials[lastIntersect].albedo;
+		}
+	}
+	else {
+		return float3(0.0, 0.0, 0.0);
+	}
 }
 
 void Assignment2CPUApp::Init()
@@ -165,9 +108,14 @@ void Assignment2CPUApp::Init()
 		float3 r2 = float3( RandomFloat(), RandomFloat(), RandomFloat() );
 		tri[i].vertex0 = r0 * 9 - float3( 5 );
 		tri[i].vertex1 = tri[i].vertex0 + r1, tri[i].vertex2 = tri[i].vertex0 + r2;
+		diffuseMaterials[i].albedo = float3(RandomFloat(), RandomFloat(), RandomFloat());
+
 	}
-	// construct the BVH
-	BuildBVH();
+
+	spheres[0] = Sphere{ float3(0.0), 1 };
+	sphereMaterials[0] = DiffuseMat{float3(1.0)};
+	spheres[1] = Sphere{ float3(2.0, 0.0, 0.0), 0.5 };
+	sphereMaterials[1] = DiffuseMat{ float3(0.5) };
 }
 
 void Assignment2CPUApp::Tick( float deltaTime )
@@ -175,6 +123,7 @@ void Assignment2CPUApp::Tick( float deltaTime )
 	// draw the scene
 	screen->Clear( 0 );
 	// define the corners of the screen in worldspace
+	float3 camera(0, 0, -18);
 	float3 p0( -1, 1, -15 ), p1( 1, 1, -15 ), p2( -1, -1, -15 );
 	Ray ray;
 	Timer t;
@@ -183,16 +132,16 @@ void Assignment2CPUApp::Tick( float deltaTime )
 		// calculate the position of a pixel on the screen in worldspace
 		float3 pixelPos = p0 + (p1 - p0) * (x / (float)SCRWIDTH) + (p2 - p0) * (y / (float)SCRHEIGHT);
 		// define the ray in worldspace
-		ray.O = float3( 0, 0, -18 );
+		ray.O = camera;
 		ray.D = normalize( pixelPos - ray.O );
 		// initially the ray has an 'infinite length'
 		ray.t = 1e30f;
-	#if 0
-		for( int i = 0; i < N; i++ ) IntersectTri( ray, tri[i] );
-	#else
-		IntersectBVH( ray, rootNodeIdx );
-	#endif
-		if (ray.t < 1e30f) screen->Plot( x, y, 0xffffff );
+		float3 color = Color(ray);
+		uint r = (uint)(color.x * 255.0);
+		uint g = (uint)(color.y * 255.0);
+		uint b = (uint)(color.z * 255.0);
+		//if (ray.t < 1e30f) screen->Plot(x, y, 0xFFFFFF);
+		screen->Plot(x, y, r << 16 | g << 8 | b);
 	}
 	float elapsed = t.elapsed() * 1000;
 	printf( "tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr( 630 ) / elapsed );
