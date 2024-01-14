@@ -13,7 +13,7 @@
 TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
 // triangle count
-#define N	64
+#define N	12
 #define NS  2
 
 // forward declarations
@@ -100,22 +100,82 @@ float3 Color(Ray& ray) {
 
 void Assignment2CPUApp::Init()
 {
-	// intialize a scene with N random triangles
-	for (int i = 0; i < N; i++)
-	{
-		float3 r0 = float3( RandomFloat(), RandomFloat(), RandomFloat() );
-		float3 r1 = float3( RandomFloat(), RandomFloat(), RandomFloat() );
-		float3 r2 = float3( RandomFloat(), RandomFloat(), RandomFloat() );
-		tri[i].vertex0 = r0 * 9 - float3( 5 );
-		tri[i].vertex1 = tri[i].vertex0 + r1, tri[i].vertex2 = tri[i].vertex0 + r2;
-		diffuseMaterials[i].albedo = float3(RandomFloat(), RandomFloat(), RandomFloat());
+	const float WALL_SIZE = 10.0;
 
-	}
+	// Back wall
+	tri[0].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[0].vertex1 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[0].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[0].albedo = float3(1.0f);
+	tri[1].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[1].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[1].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[1].albedo = float3(1.0f);
 
-	spheres[0] = Sphere{ float3(0.0), 1 };
-	sphereMaterials[0] = DiffuseMat{float3(1.0)};
-	spheres[1] = Sphere{ float3(2.0, 0.0, 0.0), 0.5 };
-	sphereMaterials[1] = DiffuseMat{ float3(0.5) };
+	// Floor
+	tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[2].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[2].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
+	tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
+
+	// Left wall
+	tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[4].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[4].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
+	tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
+
+	// Right wall
+	tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[6].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[6].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
+	tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
+
+	// Ceiling
+	tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[8].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[8].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
+	tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
+
+	// Back wall
+	tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[10].albedo = float3(1.0f);
+	tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[11].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[11].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[11].albedo = float3(1.0f);
+
+	// Left ball
+	const float S1_R = 2.0f;
+	spheres[0].origin = float3(-S1_R*1.5f, -WALL_SIZE + S1_R*0.5f, WALL_SIZE*0.5f);
+	spheres[0].radius = S1_R;
+	sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+
+	const float S2_R = 2.0f;
+	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R * 0.5f, WALL_SIZE * 0.5f);
+	spheres[1].radius = S2_R;
+	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
+
+
+	// Right ball
+
 }
 
 void Assignment2CPUApp::Tick( float deltaTime )
@@ -123,8 +183,8 @@ void Assignment2CPUApp::Tick( float deltaTime )
 	// draw the scene
 	screen->Clear( 0 );
 	// define the corners of the screen in worldspace
-	float3 camera(0, 0, -18);
-	float3 p0( -1, 1, -15 ), p1( 1, 1, -15 ), p2( -1, -1, -15 );
+	float3 camera(0, 0, -9);
+	float3 p0( -1, 1, -8 ), p1( 1, 1, -8), p2( -1, -1, -8);
 	Ray ray;
 	Timer t;
 	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++)
