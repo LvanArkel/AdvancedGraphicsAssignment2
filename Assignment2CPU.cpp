@@ -16,7 +16,7 @@ TheApp* CreateApp() { return new Assignment2CPUApp(); }
 // triangle count
 #define N	12
 #define NS  3
-#define SAMPLES_PER_PIXEL 50
+#define SAMPLES_PER_PIXEL 30
 
 // forward declarations
 
@@ -96,7 +96,7 @@ void IntersectSphere(Ray& ray, const Sphere& sphere) {
 float3 UniformSampleHemisphere(float3 normal) {
 	float3 result;
 	do {
-		result = float3(RandomFloat(), RandomFloat(), RandomFloat());
+		result = float3(RandomFloat()*2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f);
 	} while (length(result) > 1);
 	if (dot(result, normal) < 0) {
 		result = -result;
@@ -285,7 +285,7 @@ void Assignment2CPUApp::Init()
 	spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
 	spheres[2].radius = L_R;
 	sphereMaterials[2].type = LIGHT;
-	sphereMaterials[2].emittance = float3(5.0f);
+	sphereMaterials[2].emittance = float3(2.0f);
 }
 
 void Assignment2CPUApp::Tick( float deltaTime )
