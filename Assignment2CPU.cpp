@@ -29,7 +29,7 @@ enum MaterialType {
 	LIGHT
 };
 
-struct DiffuseMat {
+struct Material {
 	MaterialType type;
 	union { float3 albedo; float3 emittance; };
 };
@@ -51,15 +51,15 @@ struct Hit {
 	HitType type;
 	int index;
 	float3 normal;
-	DiffuseMat material;
+	Material material;
 };
 
 // application data
 Tri tri[N];
-DiffuseMat diffuseMaterials[N];
+Material triangleMaterials[N];
 
 Sphere spheres[NS];
-DiffuseMat sphereMaterials[NS];
+Material sphereMaterials[NS];
 
 // functions
 
@@ -142,7 +142,7 @@ Hit Trace(Ray& ray) {
 			hit.index = lastIntersect;
 			Tri triangle = tri[lastIntersect];
 			hit.normal = cross(triangle.vertex1 - triangle.vertex0, triangle.vertex2 - triangle.vertex0);
-			hit.material = diffuseMaterials[lastIntersect];
+			hit.material = triangleMaterials[lastIntersect];
 		}
 	}
 	else {
@@ -198,73 +198,73 @@ void Assignment2CPUApp::Init()
 	tri[0].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[0].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[0].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[0].type = DIFFUSE;
-	diffuseMaterials[0].albedo = float3(0.6f);
+	triangleMaterials[0].type = DIFFUSE;
+	triangleMaterials[0].albedo = float3(0.6f);
 	tri[1].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[1].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[1].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[1].type = DIFFUSE;
-	diffuseMaterials[1].albedo = float3(0.6f);
+	triangleMaterials[1].type = DIFFUSE;
+	triangleMaterials[1].albedo = float3(0.6f);
 
 	// Floor
 	tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[2].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[2].type = DIFFUSE;
-	diffuseMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
+	triangleMaterials[2].type = DIFFUSE;
+	triangleMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
 	tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[3].type = DIFFUSE;
-	diffuseMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
+	triangleMaterials[3].type = DIFFUSE;
+	triangleMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
 
 	// Left wall
 	tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[4].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[4].type = DIFFUSE;
-	diffuseMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
+	triangleMaterials[4].type = DIFFUSE;
+	triangleMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
 	tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[5].type = DIFFUSE;
-	diffuseMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
+	triangleMaterials[5].type = DIFFUSE;
+	triangleMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
 
 	// Right wall
 	tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[6].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	diffuseMaterials[6].type = DIFFUSE;
-	diffuseMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
+	triangleMaterials[6].type = DIFFUSE;
+	triangleMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
 	tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[7].type = DIFFUSE;
-	diffuseMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
+	triangleMaterials[7].type = DIFFUSE;
+	triangleMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
 
 	// Ceiling
 	tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[8].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[8].type = DIFFUSE;
-	diffuseMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
+	triangleMaterials[8].type = DIFFUSE;
+	triangleMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
 	tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[9].type = DIFFUSE;
-	diffuseMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
+	triangleMaterials[9].type = DIFFUSE;
+	triangleMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
 
 	// Back wall
 	tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[10].type = DIFFUSE;
-	diffuseMaterials[10].albedo = float3(0.6f);
+	triangleMaterials[10].type = DIFFUSE;
+	triangleMaterials[10].albedo = float3(0.6f);
 	tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	diffuseMaterials[11].type = DIFFUSE;
-	diffuseMaterials[11].albedo = float3(0.6f);
+	triangleMaterials[11].type = DIFFUSE;
+	triangleMaterials[11].albedo = float3(0.6f);
 
 	// Left ball
 	const float S1_R = 2.0f;
