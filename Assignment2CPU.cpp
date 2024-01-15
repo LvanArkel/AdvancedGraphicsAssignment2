@@ -18,6 +18,20 @@ TheApp* CreateApp() { return new Assignment2CPUApp(); }
 #define NS  3
 #define SAMPLES_PER_PIXEL 30
 
+#define GPGPU 1;
+#define CPU 0;
+
+
+static Kernel* kernel = 0; //megakernel
+static Buffer* clbuf_r = 0; // buffer for color r channel
+static Buffer* clbuf_g = 0; // buffer for color g channel
+static Buffer* clbuf_b = 0; // buffer for color b channel
+
+//SOA
+int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
+int cl_g[SCRWIDTH * SCRHEIGHT]; //color g channel sent to kernel
+int cl_b[SCRWIDTH * SCRHEIGHT]; //color b channel sent to kernel
+
 // forward declarations
 
 // minimal structs
@@ -62,6 +76,25 @@ Sphere spheres[NS];
 DiffuseMat sphereMaterials[NS];
 
 // functions
+
+void InitOpenCL() {
+	float3 camera(0, 0, -9);
+	float3 p0(-1, 1, -8), p1(1, 1, -8), p2(-1, -1, -8);
+	if (!kernel)
+	{
+		Kernel::InitCL();
+
+		kernel = new Kernel("megakernel.cl", "render");
+		clbuf_r = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_r, Buffer::DEFAULT);
+		clbuf_g = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_g, Buffer::DEFAULT);
+		clbuf_b = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_b, Buffer::DEFAULT);
+	}
+	kernel->SetArguments(clbuf_r, clbuf_g, clbuf_b, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2);
+	clbuf_r->CopyToDevice();
+	clbuf_g->CopyToDevice();
+	clbuf_b->CopyToDevice();
+
+}
 
 void IntersectTri( Ray& ray, const Tri& tri )
 {
@@ -190,6 +223,8 @@ float3 Sample(Ray& ray, int depth) {
 
 void Assignment2CPUApp::Init()
 {
+	InitOpenCL();
+
 	const float WALL_SIZE = 10.0;
 
 	// Triangles are clockwise
@@ -288,13 +323,36 @@ void Assignment2CPUApp::Init()
 	sphereMaterials[2].emittance = float3(2.0f);
 }
 
-void Assignment2CPUApp::Tick( float deltaTime )
-{
+
+void Assignment2CPUApp::TickOpenCL() {
 	// draw the scene
-	screen->Clear( 0 );
+	screen->Clear(0);
+	// define the corners of the screen in worldspace
+
+	//Ray ray;
+	Timer t;
+
+	kernel->Run(SCRWIDTH * SCRHEIGHT);
+	clbuf_r->CopyFromDevice();
+	clbuf_g->CopyFromDevice();
+	clbuf_b->CopyFromDevice();
+
+	//cout << cl_r[0] << endl;
+	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++) {
+		uint idx = y * SCRWIDTH + x;
+		//if (cl_r[idx] > 0) cout << "aa" << endl;
+		screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
+	}
+	float elapsed = t.elapsed() * 1000;
+	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+}
+
+void Assignment2CPUApp::TickCPU() {
+	// draw the scene
+	screen->Clear(0);
 	// define the corners of the screen in worldspace
 	float3 camera(0, 0, -9);
-	float3 p0( -1, 1, -8 ), p1( 1, 1, -8), p2( -1, -1, -8);
+	float3 p0(-1, 1, -8), p1(1, 1, -8), p2(-1, -1, -8);
 	Ray ray;
 	Timer t;
 	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++)
@@ -311,7 +369,7 @@ void Assignment2CPUApp::Tick( float deltaTime )
 			ray.t = 1e30f;
 			accumulator += Sample(ray, 0);
 		}
-		float3 color = accumulator / (float) SAMPLES_PER_PIXEL;
+		float3 color = accumulator / (float)SAMPLES_PER_PIXEL;
 		uint r = (uint)(min(color.x, 1.0f) * 255.0);
 		uint g = (uint)(min(color.y, 1.0f) * 255.0);
 		uint b = (uint)(min(color.z, 1.0f) * 255.0);
@@ -319,7 +377,18 @@ void Assignment2CPUApp::Tick( float deltaTime )
 		screen->Plot(x, y, r << 16 | g << 8 | b);
 	}
 	float elapsed = t.elapsed() * 1000;
-	printf( "tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr( 630 ) / elapsed );
+	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+}
+
+void Assignment2CPUApp::Tick( float deltaTime )
+{
+#if GPGPU
+	TickOpenCL();
+#elif CPU
+	TickCPU();
+#endif
+
+
 }
 
 // EOF
