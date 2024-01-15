@@ -14,7 +14,6 @@ struct Sphere
 struct Tri 
 { 
     float3 vertex0, vertex1, vertex2; 
-    float3 centroid; 
 };
 
 //GLOBAL VARIABLES
@@ -36,6 +35,25 @@ void IntersectSphere(struct Ray* ray, struct Sphere* sphere) {
 	}
 }
 
+void IntersectTri(struct Ray* ray, struct Tri* tri )
+{
+	float3 edge1 = tri->vertex1 - tri->vertex0;
+	float3 edge2 = tri->vertex2 - tri->vertex0;
+	float3 h = cross( ray->D, edge2 );
+	float a = dot( edge1, h );
+	if (a > -0.0001 && a < 0.0001) return; // ray parallel to triangle
+	float f = 1 / a;
+	float3 s = ray->O - tri->vertex0;
+	float u = f * dot( s, h );
+	if (u < 0 || u > 1) return;
+	float3 q = cross( s, edge1 );
+	float v = f * dot( ray->D, q );
+	if (v < 0 || u + v > 1) return;
+    //ray->t = 0.0;
+	float t = f * dot( edge2, q );
+	if (t > 0.1) ray->t = 0.0;//ray->t = min( ray->t, t );
+}
+
 
 __kernel void render(__global int* r, __global int* g, __global int* b, const int image_width, const int image_height,
 	const int SAMPLES_PER_PIXEL, float3 camPos, float3 p0, float3 p1, float3 p2 ){
@@ -53,7 +71,8 @@ __kernel void render(__global int* r, __global int* g, __global int* b, const in
     float3 accumulator = (float3)(0.0f);
 
     struct Sphere s0 = {(float3)(0, 0, -1), 0.5};
-
+    float WALL_SIZE =10.0;
+    struct Tri t0 = {(float3)(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(-WALL_SIZE, WALL_SIZE, -WALL_SIZE)};
     for (int i = 0; i < 1; i++) {
 		ray.O = camPos;
 		ray.D = normalize(pixelPos - ray.O);
@@ -61,6 +80,7 @@ __kernel void render(__global int* r, __global int* g, __global int* b, const in
 		ray.t = 1e30f;
 
         IntersectSphere(&ray, &s0);
+        IntersectTri(&ray, &t0);
 		//accumulator += Sample(ray, 0);
 	}
 
