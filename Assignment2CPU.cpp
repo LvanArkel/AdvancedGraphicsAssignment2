@@ -16,7 +16,7 @@ TheApp* CreateApp() { return new Assignment2CPUApp(); }
 // triangle count
 #define N	12
 #define NS  3
-#define SAMPLES_PER_PIXEL 30
+#define SAMPLES_PER_PIXEL 20
 
 // forward declarations
 
@@ -26,7 +26,8 @@ struct Tri { float3 vertex0, vertex1, vertex2; float3 centroid; };
 
 enum MaterialType {
 	DIFFUSE,
-	LIGHT
+	LIGHT,
+	MIRROR,
 };
 
 struct Material {
@@ -157,7 +158,9 @@ float3 Sample(Ray& ray, int depth) {
 	if (depth > 50) {
 		return float3(0.0f);
 	}
+	// Trace ray
 	Hit hit = Trace(ray);
+	float3 normal = normalize(hit.normal);
 #if 0
 	// START DEBUG
 	if (hit.type == NOHIT) {
@@ -168,18 +171,34 @@ float3 Sample(Ray& ray, int depth) {
 	}
 	// END DEBUG
 #endif
+	// Terminate if ray left scene
 	if (hit.type == NOHIT) {
 		return float3(0.0f);
 	}
+	// Terminate if we hit a light source
 	if (hit.material.type == LIGHT) {
 		return hit.material.emittance;
 	}
-	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
+	if (hit.material.type == MIRROR) {
+		// Continue in fixed direction
+		Ray newRay;
+		newRay.O = ray.O + ray.t * ray.D;
+		newRay.D = normalize(reflect(ray.D, normal));
+		float3 newSample = Sample(newRay, depth + 1);
+		return float3(
+			hit.material.albedo.x * newSample.x,
+			hit.material.albedo.y * newSample.y,
+			hit.material.albedo.z * newSample.z
+		);
+	}
+	// Continue in random direction
+	float3 newDirection = UniformSampleHemisphere(normal); // Normalized
 	Ray newRay;
 	newRay.O = ray.O + ray.t * ray.D;
 	newRay.D = newDirection;
+	// Update throughput
 	float3 brdf = hit.material.albedo * invPI;
-	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+	float3 partialIrradiance = 2.0f * PI * dot(normal, newDirection) * brdf;
 	float3 newSample = Sample(newRay, depth + 1);
 	return float3(
 		partialIrradiance.x * newSample.x,
@@ -277,7 +296,7 @@ void Assignment2CPUApp::Init()
 	const float S2_R = 2.0f;
 	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R * 0.5f, WALL_SIZE * 0.5f);
 	spheres[1].radius = S2_R;
-	sphereMaterials[1].type = DIFFUSE;
+	sphereMaterials[1].type = MIRROR;
 	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
 
 	// Lamp
@@ -285,7 +304,7 @@ void Assignment2CPUApp::Init()
 	spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
 	spheres[2].radius = L_R;
 	sphereMaterials[2].type = LIGHT;
-	sphereMaterials[2].emittance = float3(2.0f);
+	sphereMaterials[2].emittance = float3(5.0f);
 }
 
 void Assignment2CPUApp::Tick( float deltaTime )
