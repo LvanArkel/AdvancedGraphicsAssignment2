@@ -24,7 +24,9 @@ struct Sphere
 
 struct Tri 
 { 
-    float3 vertex0, vertex1, vertex2; 
+    float v0x, v0y, v0z;
+	float v1x, v1y, v1z;
+	float v2x, v2y, v2z;
 };
 
 struct DiffuseMat {
@@ -71,13 +73,16 @@ void IntersectSphere(struct Ray* ray, struct Sphere* sphere) {
 
 void IntersectTri(struct Ray* ray, struct Tri* tri )
 {
-	float3 edge1 = tri->vertex1 - tri->vertex0;
-	float3 edge2 = tri->vertex2 - tri->vertex0;
+	float3 vertex0 = (float3)(tri->v0x, tri->v0y, tri->v0z);
+	float3 vertex1 = (float3)(tri->v1x, tri->v1y, tri->v1z);
+	float3 vertex2 = (float3)(tri->v2x, tri->v2y, tri->v2z);
+	float3 edge1 = vertex1 - vertex0;
+	float3 edge2 = vertex2 - vertex0;
 	float3 h = cross( ray->D, edge2 );
 	float a = dot( edge1, h );
 	if (a > -0.0001 && a < 0.0001) return; // ray parallel to triangle
 	float f = 1 / a;
-	float3 s = ray->O - tri->vertex0;
+	float3 s = ray->O - vertex0;
 	float u = f * dot( s, h );
 	if (u < 0 || u > 1) return;
 	float3 q = cross( s, edge1 );
@@ -145,7 +150,8 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 ////
 
 
-__kernel void render(__global int* r, __global int* g, __global int* b, __global struct Sphere* spheres, 
+__kernel void render(__global int* r, __global int* g, __global int* b,
+					__global struct Sphere* spheres, __global struct Tri* tris,
                     const int image_width, const int image_height, const int SAMPLES_PER_PIXEL, 
                     float3 camPos, float3 p0, float3 p1, float3 p2 ){
 
@@ -157,13 +163,15 @@ __kernel void render(__global int* r, __global int* g, __global int* b, __global
 
     struct Ray ray;
 
-	float3 pixelPos = ray.O + p0 +
+	float3 pixelPos = p0 +
 		(p1 - p0) * ((float)x / image_width) +
 		(p2 - p0) * ((float)y / image_height);
     float3 accumulator = (float3)(0.0f);
 
     float WALL_SIZE = 10.0f;
     struct Sphere s0;
+	struct Tri t0 = {-WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE};
+	//struct Tri t1 = {(float3)(WALL_SIZE, -WALL_SIZE, WALL_SIZE), (float3)(-WALL_SIZE, WALL_SIZE, WALL_SIZE), (float3)(WALL_SIZE, WALL_SIZE, WALL_SIZE)};
     //s0.radius = 2.0f;
     //s0.origin = (float3)(-s0.radius * 1.5f, -WALL_SIZE + s0.radius * 0.5f, WALL_SIZE * 0.5f);
     //struct Tri t0 = {(float3)(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(-WALL_SIZE, WALL_SIZE, -WALL_SIZE)};
@@ -174,10 +182,14 @@ __kernel void render(__global int* r, __global int* g, __global int* b, __global
 		// initially the ray has an 'infinite length'
 		ray.t = 1e30f;
 
-        for (int j = 0; j < 3; j++) {
-            //spheres[j].radius = 0.5f;
-            IntersectSphere(&ray, &spheres[j]);
+        for (int j = 0; j < 12; j++) {
+        //     //spheres[j].radius = 0.5f;
+        //IntersectSphere(&ray, &spheres[0]);
+			IntersectTri(&ray, &tris[j]);
+
         }
+		//IntersectTri(&ray, &t0);
+        //IntersectTri(&ray, &t1);
         //IntersectSphere(&ray, &s0);
         //IntersectTri(&ray, &t0);
 		//accumulator += Sample(ray, 0);
