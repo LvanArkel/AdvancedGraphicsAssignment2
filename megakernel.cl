@@ -30,19 +30,21 @@ struct Tri
 };
 
 struct DiffuseMat {
-	int type; //DIFFUSE = 0, LIGHT = 1
-	union { float3 albedo; float3 emittance; };
+	int type;
+	float albx, alby, albz;
+	float emitx, emity, emitz;
 };
 
 struct Hit {
 	int type; //NOHIT = 0, TRIANGLE = 1, SPHERE = 2
 	int index;
-	float3 normal;
+	//float3 normal;
 	struct DiffuseMat material;
 };
 ////
 //GLOBAL VARIABLES
-
+__constant int N = 12; //number of tris
+__constant int NS = 3; //number of spheres
 ////
 //FUNCTIONS
 //HELPER FUNCTIONS
@@ -80,7 +82,7 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 	float3 edge2 = vertex2 - vertex0;
 	float3 h = cross( ray->D, edge2 );
 	float a = dot( edge1, h );
-	if (a > -0.0001 && a < 0.0001) return; // ray parallel to triangle
+	if (a > -0.0001f && a < 0.0001f) return; // ray parallel to triangle
 	float f = 1 / a;
 	float3 s = ray->O - vertex0;
 	float u = f * dot( s, h );
@@ -90,7 +92,7 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 	if (v < 0 || u + v > 1) return;
     //ray->t = 0.0;
 	float t = f * dot( edge2, q );
-	if (t > 0.1) ray->t = 0.0;//ray->t = min( ray->t, t );
+	if (t > 0.0001f) ray->t = min( ray->t, t );
 }
 
 // // Returns a normalized vector of which the angle is on the same hemisphere as the normal.
@@ -106,52 +108,103 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 // 	return normalize(result);
 // }
 
-// struct Hit Trace(struct Ray* ray) {
-// 	int lastIntersect = -1;
-// 	bool hitSphere = false;
-// 	for (int i = 0; i < N; i++) {
-// 		float lastT = ray.t;
-// 		IntersectTri(&ray, tri[i]);
-// 		if (lastT != ray.t) {
-// 			lastIntersect = i;
-// 		}
-// 	}
-// 	// for (int i = 0; i < NS; i++) {
-// 	// 	float lastT = ray.t;
-// 	// 	IntersectSphere(ray, spheres[i]);
-// 	// 	if (lastT != ray.t) {
-// 	// 		lastIntersect = i;
-// 	// 		hitSphere = true;
-// 	// 	}
-// 	// }
-// 	struct Hit hit;
-// 	// if (lastIntersect != -1) {
-// 	// 	if (hitSphere) {
-// 	// 		hit.type = SPHERE;
-// 	// 		hit.index = lastIntersect;
-// 	// 		Sphere sphere = spheres[lastIntersect];
-// 	// 		hit.normal = (ray.O + ray.t * ray.D) - sphere.origin;
-// 	// 		hit.material = sphereMaterials[lastIntersect];
-// 	// 	}
-// 	// 	else {
-// 	// 		hit.type = TRIANGLE;
-// 	// 		hit.index = lastIntersect;
-// 	// 		Tri triangle = tri[lastIntersect];
-// 	// 		hit.normal = cross(triangle.vertex1 - triangle.vertex0, triangle.vertex2 - triangle.vertex0);
-// 	// 		hit.material = diffuseMaterials[lastIntersect];
-// 	// 	}
-// 	// }
-// 	// else {
-// 	// 	hit.type = NOHIT;
-// 	// }
-// 	return hit;
-// }
+struct Hit Trace(struct Ray* ray,__global struct Sphere* spheres, __global struct Tri* tri,
+__global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials) {
+	int lastIntersect = -1;
+	bool hitSphere = false;
 
-////
+	//float lastT = 1e30f;
 
+	for (int i = 0; i < NS; i++) {
+		float lastT = ray->t;
+		IntersectSphere(ray, &spheres[i]);
+		if (lastT != ray->t) {
+		//if(ray->t < 1e30f){
+			lastIntersect = i;
+			hitSphere = true;
+		}
+	}
+
+	for (int i = 0; i < N; i++) {
+		float lastT = ray->t;
+		IntersectTri(ray, &tri[i]);
+		if (lastT != ray->t) {
+			lastIntersect = i;
+		}
+	}
+
+	struct Hit hit;
+	//}
+	if (lastIntersect != -1) {
+		if (hitSphere) {
+			hit.type = SPHERE;
+			hit.index = lastIntersect;
+			struct Sphere sphere = spheres[lastIntersect];
+			hit.material = sphereMaterials[lastIntersect];
+			//hit.normal = (ray->O + ray->t * ray->D) - (float3)(sphere.ox, sphere.oy, sphere.oz);
+		}
+		else {
+			hit.type = TRIANGLE;
+			hit.index = lastIntersect;
+
+			struct Tri triangle = tri[lastIntersect];
+			float3 vertex0 = (float3)(triangle.v0x, triangle.v0y, triangle.v0z);
+			float3 vertex1 = (float3)(triangle.v1x, triangle.v1y, triangle.v1z);
+			float3 vertex2 = (float3)(triangle.v2x, triangle.v2y, triangle.v2z);
+
+			hit.material = triMaterials[lastIntersect];
+			//hit.normal = cross(vertex1 - vertex0, vertex2 - vertex0);
+		}
+	}
+	else {
+		hit.type = NOHIT;
+	}
+	return hit;
+}
+
+
+float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __global struct Tri* tri,
+ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials) {
+	while (1) {
+		if (depth > 50) {
+			return (float3)(0.0f);
+		}
+
+		struct Hit hit = Trace(ray, spheres, tri, sphereMaterials, triMaterials);
+
+		if (hit.type == NOHIT) {
+			return (float3)(0.0f);
+		}
+		// if(hit.type == TRIANGLE){
+		// 	return (float3)(255.0f, 0.0f, 0.0f);
+		// }
+		// if(hit.type == SPHERE){
+		// 	return (float3)(0.0f, 255.0f, 0.0f);
+		// }
+		else {
+			//struct DiffuseMat hit_mat = hit.material;
+			float x = hit.material.albx;
+			float y = hit.material.alby;
+			float z = hit.material.albz;
+			return (float3)(x, y, z);
+		}
+
+
+		depth++;
+	}
+}
+
+
+//
+void Test(struct Ray* ray, __global struct Sphere* spheres){
+	for (int i = 0; i < 3; i++) {
+		IntersectSphere(ray, &spheres[i]);
+	}
+}
 
 __kernel void render(__global int* r, __global int* g, __global int* b,
-					__global struct Sphere* spheres, __global struct Tri* tris,
+					__global struct Sphere* spheres, __global struct Tri* tri,
+					__global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials,
                     const int image_width, const int image_height, const int SAMPLES_PER_PIXEL, 
                     float3 camPos, float3 p0, float3 p1, float3 p2 ){
 
@@ -168,32 +221,19 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 		(p2 - p0) * ((float)y / image_height);
     float3 accumulator = (float3)(0.0f);
 
-    float WALL_SIZE = 10.0f;
-    struct Sphere s0;
-	struct Tri t0 = {-WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE};
-	//struct Tri t1 = {(float3)(WALL_SIZE, -WALL_SIZE, WALL_SIZE), (float3)(-WALL_SIZE, WALL_SIZE, WALL_SIZE), (float3)(WALL_SIZE, WALL_SIZE, WALL_SIZE)};
-    //s0.radius = 2.0f;
-    //s0.origin = (float3)(-s0.radius * 1.5f, -WALL_SIZE + s0.radius * 0.5f, WALL_SIZE * 0.5f);
-    //struct Tri t0 = {(float3)(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(WALL_SIZE, -WALL_SIZE, -WALL_SIZE), (float3)(-WALL_SIZE, WALL_SIZE, -WALL_SIZE)};
-    //for (int i = 0; i < SAMPLES_PER_PIXEL; i++) {
-    for (int i = 0; i < 1; i++) {
-		ray.O = camPos;
-		ray.D = normalize(pixelPos - ray.O);
-		// initially the ray has an 'infinite length'
-		ray.t = 1e30f;
+	struct Hit hit;
 
-        for (int j = 0; j < 12; j++) {
-        //     //spheres[j].radius = 0.5f;
-        //IntersectSphere(&ray, &spheres[0]);
-			IntersectTri(&ray, &tris[j]);
+    //for (int i = 0; i < 1; i++) {
+	ray.O = camPos;
+	ray.D = normalize(pixelPos - ray.O);
+	// initially the ray has an 'infinite length'
+	ray.t = 1e30f;
 
-        }
-		//IntersectTri(&ray, &t0);
-        //IntersectTri(&ray, &t1);
-        //IntersectSphere(&ray, &s0);
-        //IntersectTri(&ray, &t0);
-		//accumulator += Sample(ray, 0);
-	}
+	accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials);
+	//}
+
+	float3 color = accumulator / 1.0;
+
 
     // calculate the position of a pixel on the screen in worldspace
 	//float3 pixelPos = p0 + (p1 - p0) * (x / (float)image_width) + (p2 - p0) * (y / (float)image_height);
@@ -211,9 +251,12 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 	// uint r = (uint)(min(color.x, 1.0f) * 255.0);
 	// uint g = (uint)(min(color.y, 1.0f) * 255.0);
 	// uint b = (uint)(min(color.z, 1.0f) * 255.0);
-    int red = 0;
-    if(ray.t < 1e30f) red = 255;
-    r[threadIdx] = red;
-    g[threadIdx] = 0;//0.0f;
-    b[threadIdx] = 0;//0.0f;
+    //int red = 0;
+    //if(ray.t < 1e30f) red = 255;
+    //if(hit.type == SPHERE) red = 255;
+	//struct DiffuseMat mt;
+	//mt = triMaterials[8];
+    r[threadIdx] = (int)(min(color[0], 1.0f) * 255.0);
+    g[threadIdx] = (int)(min(color[1], 1.0f) * 255.0);
+    b[threadIdx] = (int)(min(color[2], 1.0f) * 255.0);
 }

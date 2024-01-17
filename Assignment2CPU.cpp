@@ -13,12 +13,12 @@
 
 TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
+#define GPGPU
+//#define CPU
+
 #define N	12 // triangle count
 #define NS  3 //sphere count
 #define SAMPLES_PER_PIXEL 30
-
-#define GPGPU
-//#define CPU
 
 
 static Kernel* kernel = 0; //megakernel
@@ -27,6 +27,8 @@ static Buffer* clbuf_g = 0; // buffer for color g channel
 static Buffer* clbuf_b = 0; // buffer for color b channel
 static Buffer* clbuf_spheres = 0; // buffer for spheres
 static Buffer* clbuf_tris = 0; // buffer for triangles
+static Buffer* clbuf_mat_sphere = 0; // buffer for sphere materials
+static Buffer* clbuf_mat_tri = 0; // buffer for sphere materials
 
 //SOA
 int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
@@ -50,7 +52,7 @@ struct Tri {
 #endif
 
 
-
+#ifdef CPU
 enum MaterialType {
 	DIFFUSE,
 	LIGHT
@@ -60,6 +62,17 @@ struct DiffuseMat {
 	MaterialType type;
 	union { float3 albedo; float3 emittance; };
 };
+#endif
+#ifdef GPGPU
+#define DIFFUSE 0
+#define LIGHT 1
+struct DiffuseMat {
+	int type;
+	float albx, alby, albz;
+	float emitx, emity, emitz;
+};
+#endif
+
 __declspec(align(32)) struct BVHNode
 {
 	float3 aabbMin, aabbMax;
@@ -180,39 +193,85 @@ Hit Trace(Ray& ray) {
 
 const float invPI = 1 / PI;
 
+
+//float3 Sample(Ray& ray, int depth) {
+//
+//
+//	if (depth > 50) {
+//		return float3(0.0f);
+//	}
+//	Hit hit = Trace(ray);
+//#if 0
+//	// START DEBUG
+//	if (hit.type == NOHIT) {
+//		return float(0.0f);
+//	}
+//	else {
+//		return hit.material.albedo;
+//	}
+//	// END DEBUG
+//#endif
+//	if (hit.type == NOHIT) {
+//		return float3(0.0f);
+//	}
+//	if (hit.material.type == LIGHT) {
+//		return hit.material.emittance;
+//	}
+//	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
+//	Ray newRay;
+//	newRay.O = ray.O + ray.t * ray.D;
+//	newRay.D = newDirection;
+//	float3 brdf = hit.material.albedo * invPI;
+//	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+//	float3 newSample = Sample(newRay, depth + 1);
+//	return float3(
+//		partialIrradiance.x * newSample.x,
+//		partialIrradiance.y * newSample.y,
+//		partialIrradiance.z * newSample.z
+//	);
+//}
+
 float3 Sample(Ray& ray, int depth) {
-	if (depth > 50) {
-		return float3(0.0f);
-	}
-	Hit hit = Trace(ray);
-#if 0
-	// START DEBUG
-	if (hit.type == NOHIT) {
-		return float(0.0f);
-	}
-	else {
-		return hit.material.albedo;
-	}
-	// END DEBUG
+
+	while (1) {
+		if (depth > 50) {
+			return float3(0.0f);
+		}
+
+		Hit hit = Trace(ray);
+#if 1
+		// START DEBUG
+		if (hit.type == NOHIT) {
+			return float(0.0f);
+		}
+		else {
+			return hit.material.albedo;
+		}
+		// END DEBUG
 #endif
-	if (hit.type == NOHIT) {
-		return float3(0.0f);
+
+		depth++;
 	}
-	if (hit.material.type == LIGHT) {
-		return hit.material.emittance;
-	}
-	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
-	Ray newRay;
-	newRay.O = ray.O + ray.t * ray.D;
-	newRay.D = newDirection;
-	float3 brdf = hit.material.albedo * invPI;
-	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
-	float3 newSample = Sample(newRay, depth + 1);
-	return float3(
-		partialIrradiance.x * newSample.x,
-		partialIrradiance.y * newSample.y,
-		partialIrradiance.z * newSample.z
-	);
+
+
+	//if (hit.type == NOHIT) {
+	//	return float3(0.0f);
+	//}
+	//if (hit.material.type == LIGHT) {
+	//	return hit.material.emittance;
+	//}
+	//float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
+	//Ray newRay;
+	//newRay.O = ray.O + ray.t * ray.D;
+	//newRay.D = newDirection;
+	//float3 brdf = hit.material.albedo * invPI;
+	//float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+	//float3 newSample = Sample(newRay, depth + 1);
+	//return float3(
+	//	partialIrradiance.x * newSample.x,
+	//	partialIrradiance.y * newSample.y,
+	//	partialIrradiance.z * newSample.z
+	//);
 }
 
 void Assignment2CPUApp::TickCPU() {
@@ -235,12 +294,9 @@ void Assignment2CPUApp::TickCPU() {
 			ray.D = normalize(pixelPos - ray.O);
 			// initially the ray has an 'infinite length'
 			ray.t = 1e30f;
-			//accumulator += Sample(ray, 0);
-			for (int j = 0; j < N; j++) IntersectTri(ray, tri[j]);
+			accumulator += Sample(ray, 0);
 		}
-		//float3 color = accumulator / (float)SAMPLES_PER_PIXEL;
-		float3 color = float3(0, 0, 0);
-		if (ray.t < 1e30f) color.x = 1;
+		float3 color = accumulator / (float)SAMPLES_PER_PIXEL;
 
 		uint r = (uint)(min(color.x, 1.0f) * 255.0);
 		uint g = (uint)(min(color.y, 1.0f) * 255.0);
@@ -365,7 +421,9 @@ void InitSpheres() {
 	//spheres[0].oz = -1.0f;
 	spheres[0].radius = S1_R;
 	sphereMaterials[0].type = DIFFUSE;
-	sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+	//sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+	sphereMaterials[0].albx = 1.0f, sphereMaterials[0].alby = 1.0f, sphereMaterials[0].albz = 0.0f;
+
 
 	// Right ball
 	const float S2_R = 2.0f;
@@ -374,7 +432,7 @@ void InitSpheres() {
 	spheres[1].oz = WALL_SIZE * 0.5f;
 	spheres[1].radius = S2_R;
 	sphereMaterials[1].type = DIFFUSE;
-	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
+	sphereMaterials[1].albx = 0.0f, sphereMaterials[1].alby = 1.0f, sphereMaterials[1].albz = 1.0f;
 
 	// Lamp
 	const float L_R = 4.0f;
@@ -383,20 +441,23 @@ void InitSpheres() {
 	spheres[2].oz = 0.0f;
 	spheres[2].radius = L_R;
 	sphereMaterials[2].type = LIGHT;
-	sphereMaterials[2].emittance = float3(2.0f);
+	//sphereMaterials[2].emittance = float3(2.0f);
+	sphereMaterials[2].emitx = 2.0f, sphereMaterials[2].emity = 2.0f, sphereMaterials[2].emitz = 2.0f;
+
 }
 
 void InitTris() {
 	const float WALL_SIZE = 10.0;
-
 	// Triangles are clockwise
 	//Back wall
 	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[0].type = DIFFUSE;
-	diffuseMaterials[0].albedo = float3(0.6f);
+	diffuseMaterials[0].albx = 0.6f, diffuseMaterials[0].alby = 0.6f, diffuseMaterials[0].albz = 0.6f;
+
 	tri[1] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[1].type = DIFFUSE;
-	diffuseMaterials[1].albedo = float3(0.6f);
+	diffuseMaterials[1].albx = 0.6f, diffuseMaterials[1].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
+
 
 	//// Floor
 	//tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
@@ -404,13 +465,15 @@ void InitTris() {
 	//tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[2] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[2].type = DIFFUSE;
-	diffuseMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
+	diffuseMaterials[2].albx = 1.0f, diffuseMaterials[2].alby = 0.0f, diffuseMaterials[2].albz = 0.0f;
+
 	//tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	//tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	//tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[3] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[3].type = DIFFUSE;
-	diffuseMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
+	diffuseMaterials[3].albx = 1.0f, diffuseMaterials[3].alby = 0.0f, diffuseMaterials[3].albz = 0.0f;
+
 
 	//// Left wall
 	//tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
@@ -418,13 +481,14 @@ void InitTris() {
 	//tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[4] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[4].type = DIFFUSE;
-	diffuseMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
+	diffuseMaterials[4].albx = 0.0f, diffuseMaterials[4].alby = 1.0f, diffuseMaterials[4].albz = 0.0f;
+
 	//tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	//tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	//tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[5] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[5].type = DIFFUSE;
-	diffuseMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
+	diffuseMaterials[5].albx = 0.0f, diffuseMaterials[5].alby = 1.0f, diffuseMaterials[5].albz = 0.0f;
 
 	//// Right wall
 	//tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
@@ -432,13 +496,14 @@ void InitTris() {
 	//tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[6] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[6].type = DIFFUSE;
-	diffuseMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
+	diffuseMaterials[6].albx = 0.0f, diffuseMaterials[6].alby = 0.0f, diffuseMaterials[6].albz = 1.0f;
+
 	//tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	//tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	//tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[7] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[7].type = DIFFUSE;
-	diffuseMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
+	diffuseMaterials[7].albx = 0.0f, diffuseMaterials[7].alby = 0.0f, diffuseMaterials[7].albz = 1.0f;
 
 	//// Ceiling
 	//tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
@@ -446,13 +511,14 @@ void InitTris() {
 	//tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[8] = { -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
 	diffuseMaterials[8].type = DIFFUSE;
-	diffuseMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
+	diffuseMaterials[8].albx = 1.0f, diffuseMaterials[8].alby = 0.0f, diffuseMaterials[8].albz = 1.0f;
+
 	//tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	//tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	//tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[9] = { WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[9].type = DIFFUSE;
-	diffuseMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
+	diffuseMaterials[9].albx = 1.0f, diffuseMaterials[9].alby = 0.0f, diffuseMaterials[9].albz = 1.0f;
 
 	//// Back wall
 	//tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
@@ -460,13 +526,14 @@ void InitTris() {
 	//tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[10] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[10].type = DIFFUSE;
-	diffuseMaterials[10].albedo = float3(0.6f);
+	diffuseMaterials[10].albx = 0.6f, diffuseMaterials[10].alby = 0.6f, diffuseMaterials[10].albz = 0.6f;
+
 	//tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	//tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	//tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[11] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
 	diffuseMaterials[11].type = DIFFUSE;
-	diffuseMaterials[11].albedo = float3(0.6f);
+	diffuseMaterials[11].albx = 0.6f, diffuseMaterials[11].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
 }
 
 void InitOpenCL() {
@@ -486,13 +553,17 @@ void InitOpenCL() {
 
 		clbuf_spheres = new Buffer(NS * sizeof(Sphere), spheres, Buffer::DEFAULT);
 		clbuf_tris = new Buffer(N * sizeof(Tri), tri, Buffer::DEFAULT);
+		clbuf_mat_sphere = new Buffer(NS * sizeof(DiffuseMat), sphereMaterials, Buffer::DEFAULT);
+		clbuf_mat_tri = new Buffer(N * sizeof(DiffuseMat), diffuseMaterials, Buffer::DEFAULT);
 	}
-	kernel->SetArguments(clbuf_r, clbuf_g, clbuf_b, clbuf_spheres, clbuf_tris, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2);
+	kernel->SetArguments(clbuf_r, clbuf_g, clbuf_b, clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2);
 	clbuf_r->CopyToDevice();
 	clbuf_g->CopyToDevice();
 	clbuf_b->CopyToDevice();
 	clbuf_spheres->CopyToDevice();
 	clbuf_tris->CopyToDevice();
+	clbuf_mat_sphere->CopyToDevice();
+	clbuf_mat_tri->CopyToDevice();
 
 }
 #endif
