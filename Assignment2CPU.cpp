@@ -13,12 +13,12 @@
 
 TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
-#define GPGPU
-//#define CPU
+//#define GPGPU
+#define CPU
 
 #define N	12 // triangle count
 #define NS  3 //sphere count
-#define SAMPLES_PER_PIXEL 30
+#define SAMPLES_PER_PIXEL 1
 
 
 static Kernel* kernel = 0; //megakernel
@@ -212,9 +212,11 @@ const float invPI = 1 / PI;
 //	// END DEBUG
 //#endif
 //	if (hit.type == NOHIT) {
+//		cout << "nohit" << endl;
 //		return float3(0.0f);
 //	}
 //	if (hit.material.type == LIGHT) {
+//		cout << "emit" << endl;
 //		return hit.material.emittance;
 //	}
 //	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
@@ -223,7 +225,10 @@ const float invPI = 1 / PI;
 //	newRay.D = newDirection;
 //	float3 brdf = hit.material.albedo * invPI;
 //	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+//	cout << "a" << depth << endl;
 //	float3 newSample = Sample(newRay, depth + 1);
+//	cout << "b" << depth << endl;
+//	//cout << newSample.x << endl;//<< ', '<< newSample.y << ', ' << newSample.z << endl;
 //	return float3(
 //		partialIrradiance.x * newSample.x,
 //		partialIrradiance.y * newSample.y,
@@ -233,45 +238,57 @@ const float invPI = 1 / PI;
 
 float3 Sample(Ray& ray, int depth) {
 
+	float3 newSample = (float3)(1.0f, 1.0f, 1.0f);
 	while (1) {
 		if (depth > 50) {
 			return float3(0.0f);
 		}
 
 		Hit hit = Trace(ray);
-#if 1
+#if 0
 		// START DEBUG
 		if (hit.type == NOHIT) {
 			return float(0.0f);
 		}
 		else {
+			if (hit.material.type == LIGHT) {
+				//cout << hit.material.emittance.x << endl;
+			}
 			return hit.material.albedo;
 		}
 		// END DEBUG
 #endif
-
-		depth++;
+	if (hit.type == NOHIT) {
+		return float3(0.0f);
 	}
-
-
-	//if (hit.type == NOHIT) {
-	//	return float3(0.0f);
-	//}
-	//if (hit.material.type == LIGHT) {
-	//	return hit.material.emittance;
-	//}
-	//float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
-	//Ray newRay;
-	//newRay.O = ray.O + ray.t * ray.D;
-	//newRay.D = newDirection;
-	//float3 brdf = hit.material.albedo * invPI;
-	//float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+	if (hit.material.type == LIGHT) {
+		return hit.material.emittance * newSample;
+	}
+	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
+	Ray newRay;
+	newRay.O = ray.O + ray.t * ray.D;
+	newRay.D = newDirection;
+	float3 brdf = hit.material.albedo * invPI;
+	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+	return newDirection;
+	ray = newRay;
 	//float3 newSample = Sample(newRay, depth + 1);
+	newSample = float3(
+			partialIrradiance.x * newSample.x,
+			partialIrradiance.y * newSample.y,
+			partialIrradiance.z * newSample.z
+	);
+	depth++;
 	//return float3(
 	//	partialIrradiance.x * newSample.x,
 	//	partialIrradiance.y * newSample.y,
 	//	partialIrradiance.z * newSample.z
 	//);
+
+	}
+
+
+
 }
 
 void Assignment2CPUApp::TickCPU() {
@@ -443,6 +460,7 @@ void InitSpheres() {
 	sphereMaterials[2].type = LIGHT;
 	//sphereMaterials[2].emittance = float3(2.0f);
 	sphereMaterials[2].emitx = 2.0f, sphereMaterials[2].emity = 2.0f, sphereMaterials[2].emitz = 2.0f;
+	sphereMaterials[2].albx = 2.0f, sphereMaterials[2].alby = 2.0f, sphereMaterials[2].albz = 2.0f;
 
 }
 

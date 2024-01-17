@@ -38,7 +38,7 @@ struct DiffuseMat {
 struct Hit {
 	int type; //NOHIT = 0, TRIANGLE = 1, SPHERE = 2
 	int index;
-	//float3 normal;
+	float3 normal;
 	struct DiffuseMat material;
 };
 ////
@@ -48,16 +48,25 @@ __constant int NS = 3; //number of spheres
 ////
 //FUNCTIONS
 //HELPER FUNCTIONS
-uint RandomUInt()
-{
-	uint seed = 0x12345678;
-	seed ^= seed << 13;
-	seed ^= seed >> 17;
-	seed ^= seed << 5;
-	return seed;
+uint WangHash( uint s ) 
+{ 
+	s = (s ^ 61) ^ (s >> 16);
+	s *= 9, s = s ^ (s >> 4);
+	s *= 0x27d4eb2d;
+	s = s ^ (s >> 15); 
+	return s; 
 }
-float RandomFloat() { return RandomUInt() * 2.3283064365387e-10f; }
-float Rand( float range ) { return RandomFloat() * range; }
+uint RandomInt( uint* s ) // Marsaglia's XOR32 RNG
+{ 
+	*s ^= *s << 13;
+	*s ^= *s >> 17;
+	* s ^= *s << 5; 
+	return *s; 
+}
+float RandomFloat( uint* s ) 
+{ 
+	return RandomInt( s ) * 2.3283064365387e-10f; // = 1 / (2^32-1)
+}
 
 ////
 //OTHER FUNCTIONS
@@ -95,18 +104,18 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 	if (t > 0.0001f) ray->t = min( ray->t, t );
 }
 
-// // Returns a normalized vector of which the angle is on the same hemisphere as the normal.
-// float3 UniformSampleHemisphere(float3 normal) {
-// 	float3 result;
-// 	do {
-// 		result = (float3)(RandomFloat()*2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f);
-// 	} while (length(result) > 1);
-// 	if (dot(result, normal) < 0) {
-// 		result = -result;
-// 	}
-// 	// Normalize result
-// 	return normalize(result);
-// }
+// Returns a normalized vector of which the angle is on the same hemisphere as the normal.
+float3 UniformSampleHemisphere(float3 normal, uint* seed) {
+	float3 result;
+	do {
+		result = (float3)(RandomFloat(&seed)*2.0f - 0.5f, RandomFloat(&seed) * 2.0f - 0.5f, RandomFloat(&seed) * 2.0f - 0.5f);
+	} while (length(result) > 1);
+	if (dot(result, normal) < 0) {
+		result = -result;
+	}
+	// Normalize result
+	return normalize(result);
+}
 
 struct Hit Trace(struct Ray* ray,__global struct Sphere* spheres, __global struct Tri* tri,
 __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials) {
@@ -141,7 +150,7 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 			hit.index = lastIntersect;
 			struct Sphere sphere = spheres[lastIntersect];
 			hit.material = sphereMaterials[lastIntersect];
-			//hit.normal = (ray->O + ray->t * ray->D) - (float3)(sphere.ox, sphere.oy, sphere.oz);
+			hit.normal = (ray->O + ray->t * ray->D) - (float3)(sphere.ox, sphere.oy, sphere.oz);
 		}
 		else {
 			hit.type = TRIANGLE;
@@ -153,7 +162,7 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 			float3 vertex2 = (float3)(triangle.v2x, triangle.v2y, triangle.v2z);
 
 			hit.material = triMaterials[lastIntersect];
-			//hit.normal = cross(vertex1 - vertex0, vertex2 - vertex0);
+			hit.normal = cross(vertex1 - vertex0, vertex2 - vertex0);
 		}
 	}
 	else {
@@ -164,33 +173,73 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 
 
 float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __global struct Tri* tri,
- __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials) {
-	while (1) {
+ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials, uint* seed) {
+	float3 newSample = (float3)(1.0, 1.0, 1.0);
+
+	while (true) {
 		if (depth > 50) {
 			return (float3)(0.0f);
 		}
 
 		struct Hit hit = Trace(ray, spheres, tri, sphereMaterials, triMaterials);
 
+		// if (hit.type == NOHIT) {
+		// 	return (float3)(0.0f);
+		// }
+		// // if(hit.type == TRIANGLE){
+		// // 	return (float3)(255.0f, 0.0f, 0.0f);
+		// // }
+		// // if(hit.type == SPHERE){
+		// // 	return (float3)(0.0f, 255.0f, 0.0f);
+		// // }
+		// else {
+		// 	//struct DiffuseMat hit_mat = hit.material;
+		// 	float x = hit.material.albx;
+		// 	float y = hit.material.alby;
+		// 	float z = hit.material.albz;
+		// 	return (float3)(x, y, z);
+		// }
+
 		if (hit.type == NOHIT) {
 			return (float3)(0.0f);
 		}
-		// if(hit.type == TRIANGLE){
-		// 	return (float3)(255.0f, 0.0f, 0.0f);
+		// if (hit.type == SPHERE) {
+		// 	return (float3)(1.0f, 0.0f, 0.0f);
 		// }
-		// if(hit.type == SPHERE){
-		// 	return (float3)(0.0f, 255.0f, 0.0f);
+		// if (hit.type == TRIANGLE) {
+		// 	return (float3)(0.0f, 1.0f, 0.0f);
 		// }
-		else {
-			//struct DiffuseMat hit_mat = hit.material;
-			float x = hit.material.albx;
-			float y = hit.material.alby;
-			float z = hit.material.albz;
-			return (float3)(x, y, z);
+		if (hit.material.type == LIGHT) {
+			float x = hit.material.emitx;
+			float y = hit.material.emity;
+			float z = hit.material.emitz;
+			float3 mat_emmitance = (float3)(x, y, z);
+			return mat_emmitance * newSample;
 		}
+		float3 newDirection = UniformSampleHemisphere(hit.normal, seed); // Normalized
+		struct Ray newRay;
+		newRay.O = ray->O + ray->t * ray->D;
+		newRay.D = newDirection;
+		float3 mat_albedo = (float3)(hit.material.albx, hit.material.alby, hit.material.albz);
+		float3 brdf = mat_albedo * (1.0f/ M_PI_F);//M_1_PI_F;
 
+		float3 partialIrradiance = 2.0f * M_PI_F * dot(normalize(hit.normal), newDirection) * brdf;
+		//return newDirection;
+
+		//float3 newSample = Sample(newRay, depth + 1);
+
+		ray->O = newRay.O;
+		ray->D = newRay.D;
+		ray->t = newRay.t;
+
+		newSample = (float3)(
+			partialIrradiance[0] * newSample[0],
+			partialIrradiance[1] * newSample[1],
+			partialIrradiance[2] * newSample[2]
+		);
 
 		depth++;
+		//return (float3)(0.0f);
 	}
 }
 
@@ -213,6 +262,7 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 	if (threadIdx >= image_width * image_height) return;
 	int x = threadIdx % image_width;
 	int y = threadIdx / image_width;
+	const uint seed =  WangHash( (threadIdx+1)*17 );
 
     struct Ray ray;
 
@@ -223,14 +273,14 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 
 	struct Hit hit;
 
-    //for (int i = 0; i < 1; i++) {
-	ray.O = camPos;
-	ray.D = normalize(pixelPos - ray.O);
-	// initially the ray has an 'infinite length'
-	ray.t = 1e30f;
+    for (int i = 0; i < SAMPLES_PER_PIXEL; i++) {
+		ray.O = camPos;
+		ray.D = normalize(pixelPos - ray.O);
+		// initially the ray has an 'infinite length'
+		ray.t = 1e30f;
 
-	accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials);
-	//}
+		accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials, seed);
+	}
 
 	float3 color = accumulator / 1.0;
 
