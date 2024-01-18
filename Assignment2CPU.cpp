@@ -14,10 +14,12 @@
 TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
 // triangle count
-#define N	10
-#define NS  3
+//#define N	10
+//#define NS  3
+#define N 12
+#define NS 2
 #define SAMPLES_PER_PIXEL 10
-#define USE_NEE
+//#define USE_NEE
 
 // forward declarations
 
@@ -126,9 +128,18 @@ LightCheck RandomPointOnLight(float3 src) {
 	int selectedLight = (int) (RandomFloat() * totalLights);
 	LightCheck lightCheck;
 	if (selectedLight < triangleLightSize) {
-		// Selecting triangle
-		// TODO: Implement triangle light
-		exit(-1);
+		Tri selectedTri = tri[triangleLights[selectedLight]];
+		Material selectedMat = triangleMaterials[triangleLights[selectedLight]];
+		lightCheck.light = selectedMat;
+		float u = RandomFloat();
+		float v = RandomFloat();
+		float uSqrt = sqrtf(u);
+		float3 triCross = cross(selectedTri.vertex1 - selectedTri.vertex0, selectedTri.vertex2 - selectedTri.vertex0);
+		float3 I = (1 - uSqrt) * selectedTri.vertex0 + uSqrt * (1 - v) * selectedTri.vertex1 + uSqrt * v * selectedTri.vertex2;
+		lightCheck.L = I;
+		lightCheck.Nl = normalize(triCross);
+		lightCheck.dist = length(I - src);
+		lightCheck.A = 0.5f * length(triCross);
 	}
 	else {
 		// Selecting sphere
@@ -356,11 +367,22 @@ void Assignment2CPUApp::Init()
 	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
 
 	// Lamp
-	const float L_R = 4.0f;
-	spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
-	spheres[2].radius = L_R;
-	sphereMaterials[2].type = LIGHT;
-	sphereMaterials[2].emittance = float3(5.0f);
+	//const float L_R = 4.0f;
+	//spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
+	//spheres[2].radius = L_R;
+	//sphereMaterials[2].type = LIGHT;
+	//sphereMaterials[2].emittance = float3(5.0f);
+	const float L_S = 4.0f;
+	tri[8].vertex0 = float3(-L_S, WALL_SIZE, L_S);
+	tri[8].vertex2 = float3(L_S, WALL_SIZE, L_S);
+	tri[8].vertex1 = float3(-L_S, WALL_SIZE, -L_S);
+	triangleMaterials[8].type = LIGHT;
+	triangleMaterials[8].albedo = float3(4.0f);
+	tri[9].vertex0 = float3(L_S, WALL_SIZE, L_S);
+	tri[9].vertex1 = float3(-L_S, WALL_SIZE, -L_S);
+	tri[9].vertex2 = float3(L_S, WALL_SIZE, -L_S);
+	triangleMaterials[9].type = LIGHT;
+	triangleMaterials[9].albedo = float3(4.0f);
 
 	// Add all lights to buffer
 	for (int i = 0; i < N; i++) {
