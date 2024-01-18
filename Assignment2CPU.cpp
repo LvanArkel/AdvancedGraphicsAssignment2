@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
 #define N	12 // triangle count
 #define NS  3 //sphere count
-#define SAMPLES_PER_PIXEL 1
+#define SAMPLES_PER_PIXEL 10
 
 
 static Kernel* kernel = 0; //megakernel
@@ -270,7 +270,7 @@ float3 Sample(Ray& ray, int depth) {
 	newRay.D = newDirection;
 	float3 brdf = hit.material.albedo * invPI;
 	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
-	return newDirection;
+	//return newDirection;
 	ray = newRay;
 	//float3 newSample = Sample(newRay, depth + 1);
 	newSample = float3(
@@ -604,12 +604,13 @@ void Assignment2CPUApp::TickOpenCL() {
 	// define the corners of the screen in worldspace
 
 	//Ray ray;
-	Timer t;
+	//Timer t;
 
 	kernel->Run(SCRWIDTH * SCRHEIGHT);
 	clbuf_r->CopyFromDevice();
 	clbuf_g->CopyFromDevice();
 	clbuf_b->CopyFromDevice();
+
 
 	//cout << cl_r[0] << endl;
 	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++) {
@@ -617,8 +618,9 @@ void Assignment2CPUApp::TickOpenCL() {
 		//if (cl_r[idx] > 0) cout << "aa" << endl;
 		screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
 	}
-	float elapsed = t.elapsed() * 1000;
-	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+	cout << "rendered 1 frame" << endl;
+	//float elapsed = t.elapsed() * 1000;
+	//printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
 }
 
 

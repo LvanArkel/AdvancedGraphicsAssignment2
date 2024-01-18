@@ -48,6 +48,10 @@ __constant int NS = 3; //number of spheres
 ////
 //FUNCTIONS
 //HELPER FUNCTIONS
+
+// using random numbers in GPU code:
+// 1. seed using the thread id and a Wang Hash: seed = WangHash( (threadidx+1)*17 )
+// 2. from there on: use RandomInt / RandomFloat
 uint WangHash( uint s ) 
 { 
 	s = (s ^ 61) ^ (s >> 16);
@@ -108,7 +112,7 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 float3 UniformSampleHemisphere(float3 normal, uint* seed) {
 	float3 result;
 	do {
-		result = (float3)(RandomFloat(&seed)*2.0f - 0.5f, RandomFloat(&seed) * 2.0f - 0.5f, RandomFloat(&seed) * 2.0f - 0.5f);
+		result = (float3)(RandomFloat(seed)*2.0f - 0.5f, RandomFloat(seed) * 2.0f - 0.5f, RandomFloat(seed) * 2.0f - 0.5f);
 	} while (length(result) > 1);
 	if (dot(result, normal) < 0) {
 		result = -result;
@@ -223,6 +227,8 @@ float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __glo
 		float3 mat_albedo = (float3)(hit.material.albx, hit.material.alby, hit.material.albz);
 		float3 brdf = mat_albedo * (1.0f/ M_PI_F);//M_1_PI_F;
 
+		//return mat_albedo;
+
 		float3 partialIrradiance = 2.0f * M_PI_F * dot(normalize(hit.normal), newDirection) * brdf;
 		//return newDirection;
 
@@ -262,7 +268,7 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 	if (threadIdx >= image_width * image_height) return;
 	int x = threadIdx % image_width;
 	int y = threadIdx / image_width;
-	const uint seed =  WangHash( (threadIdx+1)*17 );
+	uint seed =  WangHash( (threadIdx+1)*17 );
 
     struct Ray ray;
 
@@ -279,10 +285,10 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 		// initially the ray has an 'infinite length'
 		ray.t = 1e30f;
 
-		accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials, seed);
+		accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials, &seed);
 	}
 
-	float3 color = accumulator / 1.0;
+	float3 color = accumulator / SAMPLES_PER_PIXEL;
 
 
     // calculate the position of a pixel on the screen in worldspace
