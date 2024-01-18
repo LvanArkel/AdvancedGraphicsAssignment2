@@ -12,7 +12,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectName>Assignment2Megakernel</ProjectName>
-    <ProjectGuid>{5114BA01-269E-409B-B22D-88E91724CB71}</ProjectGuid>
+    <ProjectGuid>{D2CD9651-729A-4CF7-B51E-41D4A01EDD7D}</ProjectGuid>
     <RootNamespace>Tmpl8</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
@@ -121,7 +121,7 @@
   </ItemDefinitionGroup>
   <!-- END Custom section -->
   <ItemGroup>
-    <ClCompile Include="Assignment2CPU.cpp" />
+    <ClCompile Include="Assignment2Megakernel.cpp" />
     <ClCompile Include="template\template.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">precomp.h</PrecompiledHeaderFile>
@@ -130,13 +130,14 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Assignment2CPU.h" />
+    <ClInclude Include="Assignment2Megakernel.h" />
     <ClInclude Include="cl\tools.cl" />
     <ClInclude Include="template\common.h" />
     <ClInclude Include="template\precomp.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cl\kernels.cl" />
+    <None Include="cl\megakernel.cl" />
     <None Include="README.md" />
     <None Include="template\LICENSE" />
   </ItemGroup>

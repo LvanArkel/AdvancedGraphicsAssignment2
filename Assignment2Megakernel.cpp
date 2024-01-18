@@ -13,30 +13,66 @@
 
 TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 
-// triangle count
-//#define N	10
-//#define NS  3
-#define N 12
-#define NS 2
+#define GPGPU
+//#define CPU
+
+#define N	12 // triangle count
+#define NS  3 //sphere count
 #define SAMPLES_PER_PIXEL 10
-//#define USE_NEE
+
+
+static Kernel* kernel = 0; //megakernel
+static Buffer* clbuf_r = 0; // buffer for color r channel
+static Buffer* clbuf_g = 0; // buffer for color g channel
+static Buffer* clbuf_b = 0; // buffer for color b channel
+static Buffer* clbuf_spheres = 0; // buffer for spheres
+static Buffer* clbuf_tris = 0; // buffer for triangles
+static Buffer* clbuf_mat_sphere = 0; // buffer for sphere materials
+static Buffer* clbuf_mat_tri = 0; // buffer for sphere materials
+
+//SOA
+int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
+int cl_g[SCRWIDTH * SCRHEIGHT]; //color g channel sent to kernel
+int cl_b[SCRWIDTH * SCRHEIGHT]; //color b channel sent to kernel
 
 // forward declarations
 
 // minimal structs
+#ifdef CPU
 struct Sphere { float3 origin; float radius; };
 struct Tri { float3 vertex0, vertex1, vertex2; float3 centroid; };
+#endif
+#ifdef GPGPU
+struct Sphere { float ox, oy, oz; float radius; };
+struct Tri {
+	float v0x, v0y, v0z;
+	float v1x, v1y, v1z;
+	float v2x, v2y, v2z;
+};
+#endif
 
+
+#ifdef CPU
 enum MaterialType {
 	DIFFUSE,
-	LIGHT,
-	MIRROR,
+	LIGHT
 };
 
-struct Material {
+struct DiffuseMat {
 	MaterialType type;
 	union { float3 albedo; float3 emittance; };
 };
+#endif
+#ifdef GPGPU
+#define DIFFUSE 0
+#define LIGHT 1
+struct DiffuseMat {
+	int type;
+	float albx, alby, albz;
+	float emitx, emity, emitz;
+};
+#endif
+
 __declspec(align(32)) struct BVHNode
 {
 	float3 aabbMin, aabbMax;
@@ -55,40 +91,34 @@ struct Hit {
 	HitType type;
 	int index;
 	float3 normal;
-	Material material;
+	DiffuseMat material;
 };
 
 // application data
 Tri tri[N];
-Material triangleMaterials[N];
-
-int triangleLightSize;
-uint triangleLights[N];
+DiffuseMat diffuseMaterials[N];
 
 Sphere spheres[NS];
-Material sphereMaterials[NS];
-
-int sphereLightSize;
-uint sphereLights[NS];
+DiffuseMat sphereMaterials[NS];
 
 // functions
-
-void IntersectTri( Ray& ray, const Tri& tri )
+#ifdef CPU
+void IntersectTri(Ray& ray, const Tri& tri)
 {
 	const float3 edge1 = tri.vertex1 - tri.vertex0;
 	const float3 edge2 = tri.vertex2 - tri.vertex0;
-	const float3 h = cross( ray.D, edge2 );
-	const float a = dot( edge1, h );
+	const float3 h = cross(ray.D, edge2);
+	const float a = dot(edge1, h);
 	if (a > -0.0001f && a < 0.0001f) return; // ray parallel to triangle
 	const float f = 1 / a;
 	const float3 s = ray.O - tri.vertex0;
-	const float u = f * dot( s, h );
+	const float u = f * dot(s, h);
 	if (u < 0 || u > 1) return;
-	const float3 q = cross( s, edge1 );
-	const float v = f * dot( ray.D, q );
+	const float3 q = cross(s, edge1);
+	const float v = f * dot(ray.D, q);
 	if (v < 0 || u + v > 1) return;
-	const float t = f * dot( edge2, q );
-	if (t > 0.0001f) ray.t = min( ray.t, t );
+	const float t = f * dot(edge2, q);
+	if (t > 0.0001f) ray.t = min(ray.t, t);
 }
 
 void IntersectSphere(Ray& ray, const Sphere& sphere) {
@@ -106,58 +136,14 @@ void IntersectSphere(Ray& ray, const Sphere& sphere) {
 float3 UniformSampleHemisphere(float3 normal) {
 	float3 result;
 	do {
-		result = float3(RandomFloat()*2.0f - 1.0f, RandomFloat() * 2.0f - 1.0f, RandomFloat() * 2.0f - 1.0f);
-	} while (sqrLength(result) > 1);
+		result = float3(RandomFloat() * 2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f);
+	} while (length(result) > 1);
 	if (dot(result, normal) < 0) {
 		result = -result;
 	}
 	// Normalize result
 	return normalize(result);
 }
-
-struct LightCheck {
-	Material light;
-	float3 L; // Normalized
-	float3 Nl; // Normalized
-	float dist;
-	float A;
-};
-
-LightCheck RandomPointOnLight(float3 src) {
-	int totalLights = triangleLightSize + sphereLightSize;
-	int selectedLight = (int) (RandomFloat() * totalLights);
-	LightCheck lightCheck;
-	if (selectedLight < triangleLightSize) {
-		Tri selectedTri = tri[triangleLights[selectedLight]];
-		Material selectedMat = triangleMaterials[triangleLights[selectedLight]];
-		lightCheck.light = selectedMat;
-		float u = RandomFloat();
-		float v = RandomFloat();
-		float uSqrt = sqrtf(u);
-		float3 triCross = cross(selectedTri.vertex1 - selectedTri.vertex0, selectedTri.vertex2 - selectedTri.vertex0);
-		float3 I = (1 - uSqrt) * selectedTri.vertex0 + uSqrt * (1 - v) * selectedTri.vertex1 + uSqrt * v * selectedTri.vertex2;
-		lightCheck.L = I;
-		lightCheck.Nl = normalize(triCross);
-		lightCheck.dist = length(I - src);
-		lightCheck.A = 0.5f * length(triCross);
-	}
-	else {
-		// Selecting sphere
-		selectedLight -= triangleLightSize;
-		Sphere selectedSphere = spheres[sphereLights[selectedLight]];
-		float3 direction = src - selectedSphere.origin;
-		float3 I = UniformSampleHemisphere(direction);
-		float3 intersectDirection = I - src;
-		lightCheck.light = sphereMaterials[sphereLights[selectedLight]];
-		lightCheck.L = normalize(intersectDirection);
-		lightCheck.Nl = normalize(I - selectedSphere.origin);
-		lightCheck.dist = length(intersectDirection);
-		lightCheck.A = 2 * PI * selectedSphere.radius * selectedSphere.radius;
-	}
-	return lightCheck;
-}
-
-
 
 // Traces the ray throughout the scene, testing intersections with triangles and spheres.
 // Updates the distance of the ray while tracing.
@@ -196,7 +182,7 @@ Hit Trace(Ray& ray) {
 			hit.index = lastIntersect;
 			Tri triangle = tri[lastIntersect];
 			hit.normal = cross(triangle.vertex1 - triangle.vertex0, triangle.vertex2 - triangle.vertex0);
-			hit.material = triangleMaterials[lastIntersect];
+			hit.material = diffuseMaterials[lastIntersect];
 		}
 	}
 	else {
@@ -207,205 +193,110 @@ Hit Trace(Ray& ray) {
 
 const float invPI = 1 / PI;
 
-float3 Sample(Ray& ray, int depth, bool lastSpecular) {
-	if (depth > 10) {
-		return float3(0.0f);
-	}
-	// Trace ray
-	Hit hit = Trace(ray);
-	float3 normal = normalize(hit.normal);
-	float3 I = ray.O + ray.t * ray.D;
-#if 0
-	// START DEBUG
-	if (hit.type == NOHIT) {
-		return float(0.0f);
-	}
-	else {
-		return hit.material.albedo;
-	}
-	// END DEBUG
-#endif
-	// Terminate if ray left scene
-	if (hit.type == NOHIT) {
-		return float3(0.0f);
-	}
-	float3 brdf = hit.material.albedo * invPI;
-	// Terminate if we hit a light source
-	if (hit.material.type == LIGHT) {
-#ifdef USE_NEE
-		if (lastSpecular) {
-			return hit.material.emittance;
-		}
-		else {
+
+//float3 Sample(Ray& ray, int depth) {
+//
+//
+//	if (depth > 50) {
+//		return float3(0.0f);
+//	}
+//	Hit hit = Trace(ray);
+//#if 0
+//	// START DEBUG
+//	if (hit.type == NOHIT) {
+//		return float(0.0f);
+//	}
+//	else {
+//		return hit.material.albedo;
+//	}
+//	// END DEBUG
+//#endif
+//	if (hit.type == NOHIT) {
+//		cout << "nohit" << endl;
+//		return float3(0.0f);
+//	}
+//	if (hit.material.type == LIGHT) {
+//		cout << "emit" << endl;
+//		return hit.material.emittance;
+//	}
+//	float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
+//	Ray newRay;
+//	newRay.O = ray.O + ray.t * ray.D;
+//	newRay.D = newDirection;
+//	float3 brdf = hit.material.albedo * invPI;
+//	float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+//	cout << "a" << depth << endl;
+//	float3 newSample = Sample(newRay, depth + 1);
+//	cout << "b" << depth << endl;
+//	//cout << newSample.x << endl;//<< ', '<< newSample.y << ', ' << newSample.z << endl;
+//	return float3(
+//		partialIrradiance.x * newSample.x,
+//		partialIrradiance.y * newSample.y,
+//		partialIrradiance.z * newSample.z
+//	);
+//}
+
+float3 Sample(Ray& ray, int depth) {
+
+	float3 newSample = (float3)(1.0f, 1.0f, 1.0f);
+	while (1) {
+		if (depth > 50) {
 			return float3(0.0f);
 		}
-#else
-		return hit.material.emittance;
+
+		Hit hit = Trace(ray);
+#if 0
+		// START DEBUG
+		if (hit.type == NOHIT) {
+			return float(0.0f);
+		}
+		else {
+			if (hit.material.type == LIGHT) {
+				//cout << hit.material.emittance.x << endl;
+			}
+			return hit.material.albedo;
+		}
+		// END DEBUG
 #endif
-	}
-#ifndef USE_NEE
-	if (hit.material.type == MIRROR) {
-		// Continue in fixed direction
+		if (hit.type == NOHIT) {
+			return float3(0.0f);
+		}
+		if (hit.material.type == LIGHT) {
+			return hit.material.emittance * newSample;
+		}
+		float3 newDirection = UniformSampleHemisphere(hit.normal); // Normalized
 		Ray newRay;
-		newRay.O = I;
-		newRay.D = normalize(reflect(ray.D, normal));
-		return hit.material.albedo * Sample(newRay, depth + 1, false);
-	}
-#else
-	if (hit.material.type == MIRROR) {
-		exit(-1);
-	}
-#endif
-	float3 Ld = 0;
-#ifdef USE_NEE
-	// Sample a random light source
-	LightCheck lightHit = RandomPointOnLight(I);
-	Ray shadowRay;
-	shadowRay.O = I;
-	shadowRay.D = lightHit.L;
-	shadowRay.t = lightHit.dist;
-	// Cast shadow ray
-	Trace(shadowRay);
-	if (dot(normal, lightHit.L) > 0 && dot(lightHit.Nl, -lightHit.L) > 0) if (shadowRay.t == lightHit.dist) {
-		float solidAngle = (dot(lightHit.Nl, -lightHit.L) * lightHit.A) / (lightHit.dist * lightHit.dist);
-		Ld = lightHit.light.emittance * solidAngle * dot(normal, lightHit.L) * (triangleLightSize + sphereLightSize);
-		Ld = float3(
-			brdf.x * Ld.x,
-			brdf.y * Ld.y,
-			brdf.z * Ld.z
+		newRay.O = ray.O + ray.t * ray.D;
+		newRay.D = newDirection;
+		float3 brdf = hit.material.albedo * invPI;
+		float3 partialIrradiance = 2.0f * PI * dot(normalize(hit.normal), newDirection) * brdf;
+		//return newDirection;
+		ray = newRay;
+		//float3 newSample = Sample(newRay, depth + 1);
+		newSample = float3(
+			partialIrradiance.x * newSample.x,
+			partialIrradiance.y * newSample.y,
+			partialIrradiance.z * newSample.z
 		);
+		depth++;
+		//return float3(
+		//	partialIrradiance.x * newSample.x,
+		//	partialIrradiance.y * newSample.y,
+		//	partialIrradiance.z * newSample.z
+		//);
+
 	}
-#endif
-	// Continue in random direction
-	float3 newDirection = UniformSampleHemisphere(normal); // Normalized
-	Ray newRay;
-	newRay.O = I;
-	newRay.D = newDirection;
-	// Update throughput
-	float3 Ei = Sample(newRay, depth + 1, false) * dot(normal, newDirection);
-	return PI * 2.0f * brdf * Ei + Ld;
+
+
+
 }
 
-void Assignment2MegakernelApp::Init()
-{
-	const float WALL_SIZE = 10.0;
-
-	// Triangles are clockwise
-
-	// Back wall
-	tri[0].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[0].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[0].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	triangleMaterials[0].type = DIFFUSE;
-	triangleMaterials[0].albedo = float3(1.0f);
-	tri[1].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[1].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	tri[1].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	triangleMaterials[1].type = DIFFUSE;
-	triangleMaterials[1].albedo = float3(1.0f);
-
-	// Floor
-	tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[2].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	triangleMaterials[2].type = DIFFUSE;
-	triangleMaterials[2].albedo = float3(1.0f);
-	tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	triangleMaterials[3].type = DIFFUSE;
-	triangleMaterials[3].albedo = float3(1.0f);
-
-	// Left wall
-	tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[4].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[4].type = DIFFUSE;
-	triangleMaterials[4].albedo = float3(1.0f, 0.0f, 0.0f);
-	tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	triangleMaterials[5].type = DIFFUSE;
-	triangleMaterials[5].albedo = float3(1.0f, 0.0f, 0.0f);
-
-	// Right wall
-	tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
-	tri[6].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	triangleMaterials[6].type = DIFFUSE;
-	triangleMaterials[6].albedo = float3(0.0f, 1.0f, 0.0f);
-	tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[7].type = DIFFUSE;
-	triangleMaterials[7].albedo = float3(0.0f, 1.0f, 0.0f);
-
-	// Ceiling
-	tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	tri[8].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[8].type = DIFFUSE;
-	triangleMaterials[8].albedo = float3(1.0f);
-	tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
-	tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[9].type = DIFFUSE;
-	triangleMaterials[9].albedo = float3(1.0f);
-
-	// Left ball
-	const float S1_R = 2.0f;
-	spheres[0].origin = float3(-S1_R*1.5f, -WALL_SIZE + S1_R, WALL_SIZE*0.5f);
-	spheres[0].radius = S1_R;
-	sphereMaterials[0].type = DIFFUSE;
-	sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
-
-	// Right ball
-	const float S2_R = 2.0f;
-	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f);
-	spheres[1].radius = S2_R;
-	sphereMaterials[1].type = DIFFUSE;
-	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
-
-	// Lamp
-	//const float L_R = 4.0f;
-	//spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
-	//spheres[2].radius = L_R;
-	//sphereMaterials[2].type = LIGHT;
-	//sphereMaterials[2].emittance = float3(5.0f);
-	const float L_S = 4.0f;
-	tri[8].vertex0 = float3(-L_S, WALL_SIZE, L_S);
-	tri[8].vertex2 = float3(L_S, WALL_SIZE, L_S);
-	tri[8].vertex1 = float3(-L_S, WALL_SIZE, -L_S);
-	triangleMaterials[8].type = LIGHT;
-	triangleMaterials[8].albedo = float3(4.0f);
-	tri[9].vertex0 = float3(L_S, WALL_SIZE, L_S);
-	tri[9].vertex1 = float3(-L_S, WALL_SIZE, -L_S);
-	tri[9].vertex2 = float3(L_S, WALL_SIZE, -L_S);
-	triangleMaterials[9].type = LIGHT;
-	triangleMaterials[9].albedo = float3(4.0f);
-
-	// Add all lights to buffer
-	for (int i = 0; i < N; i++) {
-		Material material = triangleMaterials[i];
-		if (material.type == LIGHT) {
-			triangleLights[triangleLightSize++] = i;
-		}
-	}
-	for (int i = 0; i < NS; i++) {
-		Material material = sphereMaterials[i];
-		if (material.type == LIGHT) {
-			sphereLights[sphereLightSize++] = i;
-		}
-	}
-}
-
-void Assignment2MegakernelApp::Tick( float deltaTime )
-{
+void Assignment2MegakernelApp::TickCPU() {
 	// draw the scene
-	screen->Clear( 0 );
+	screen->Clear(0);
 	// define the corners of the screen in worldspace
-	float3 camera(0, 0, -15);
-	float3 p0( -1, 1, -14 ), p1( 1, 1, -14), p2( -1, -1, -14);
+	float3 camera(0, 0, -9);
+	float3 p0(-1, 1, -8), p1(1, 1, -8), p2(-1, -1, -8);
 	Ray ray;
 	Timer t;
 	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++)
@@ -420,9 +311,10 @@ void Assignment2MegakernelApp::Tick( float deltaTime )
 			ray.D = normalize(pixelPos - ray.O);
 			// initially the ray has an 'infinite length'
 			ray.t = 1e30f;
-			accumulator += Sample(ray, 0, true);
+			accumulator += Sample(ray, 0);
 		}
-		float3 color = accumulator / (float) SAMPLES_PER_PIXEL;
+		float3 color = accumulator / (float)SAMPLES_PER_PIXEL;
+
 		uint r = (uint)(min(color.x, 1.0f) * 255.0);
 		uint g = (uint)(min(color.y, 1.0f) * 255.0);
 		uint b = (uint)(min(color.z, 1.0f) * 255.0);
@@ -430,7 +322,316 @@ void Assignment2MegakernelApp::Tick( float deltaTime )
 		screen->Plot(x, y, r << 16 | g << 8 | b);
 	}
 	float elapsed = t.elapsed() * 1000;
-	printf( "tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr( 630 ) / elapsed );
+	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
 }
 
-// EOF
+void InitCPU() {
+	const float WALL_SIZE = 10.0;
+
+	// Triangles are clockwise
+
+	// Back wall
+	tri[0].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[0].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[0].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[0].type = DIFFUSE;
+	diffuseMaterials[0].albedo = float3(0.6f);
+	tri[1].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[1].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[1].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[1].type = DIFFUSE;
+	diffuseMaterials[1].albedo = float3(0.6f);
+
+	// Floor
+	tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[2].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[2].type = DIFFUSE;
+	diffuseMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
+	tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[3].type = DIFFUSE;
+	diffuseMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
+
+	// Left wall
+	tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[4].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[4].type = DIFFUSE;
+	diffuseMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
+	tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[5].type = DIFFUSE;
+	diffuseMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
+
+	// Right wall
+	tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[6].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	diffuseMaterials[6].type = DIFFUSE;
+	diffuseMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
+	tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[7].type = DIFFUSE;
+	diffuseMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
+
+	// Ceiling
+	tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[8].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[8].type = DIFFUSE;
+	diffuseMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
+	tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[9].type = DIFFUSE;
+	diffuseMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
+
+	// Back wall
+	tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[10].type = DIFFUSE;
+	diffuseMaterials[10].albedo = float3(0.6f);
+	tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	diffuseMaterials[11].type = DIFFUSE;
+	diffuseMaterials[11].albedo = float3(0.6f);
+
+	// Left ball
+	const float S1_R = 2.0f;
+	spheres[0].origin = float3(-S1_R * 1.5f, -WALL_SIZE + S1_R * 0.5f, WALL_SIZE * 0.5f);
+	spheres[0].radius = S1_R;
+	sphereMaterials[0].type = DIFFUSE;
+	sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+
+	// Right ball
+	const float S2_R = 2.0f;
+	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R * 0.5f, WALL_SIZE * 0.5f);
+	spheres[1].radius = S2_R;
+	sphereMaterials[1].type = DIFFUSE;
+	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
+
+	// Lamp
+	const float L_R = 4.0f;
+	spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
+	spheres[2].radius = L_R;
+	sphereMaterials[2].type = LIGHT;
+	sphereMaterials[2].emittance = float3(2.0f);
+}
+#endif
+#ifdef GPGPU
+void InitSpheres() {
+	const float WALL_SIZE = 10.0f;
+
+	// Left ball
+	const float S1_R = 2.0f;
+	spheres[0].ox = -S1_R * 1.5f;
+	spheres[0].oy = -WALL_SIZE + S1_R * 0.5f;
+	spheres[0].oz = WALL_SIZE * 0.5f;
+	//spheres[0].ox = 0.0f;
+	//spheres[0].oy = 0.0f;
+	//spheres[0].oz = -1.0f;
+	spheres[0].radius = S1_R;
+	sphereMaterials[0].type = DIFFUSE;
+	//sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+	sphereMaterials[0].albx = 1.0f, sphereMaterials[0].alby = 1.0f, sphereMaterials[0].albz = 0.0f;
+
+
+	// Right ball
+	const float S2_R = 2.0f;
+	spheres[1].ox = S2_R * 1.5f;
+	spheres[1].oy = -WALL_SIZE + S2_R * 0.5f;
+	spheres[1].oz = WALL_SIZE * 0.5f;
+	spheres[1].radius = S2_R;
+	sphereMaterials[1].type = DIFFUSE;
+	sphereMaterials[1].albx = 0.0f, sphereMaterials[1].alby = 1.0f, sphereMaterials[1].albz = 1.0f;
+
+	// Lamp
+	const float L_R = 4.0f;
+	spheres[2].ox = 0.0f;
+	spheres[2].oy = WALL_SIZE;
+	spheres[2].oz = 0.0f;
+	spheres[2].radius = L_R;
+	sphereMaterials[2].type = LIGHT;
+	//sphereMaterials[2].emittance = float3(2.0f);
+	sphereMaterials[2].emitx = 2.0f, sphereMaterials[2].emity = 2.0f, sphereMaterials[2].emitz = 2.0f;
+	sphereMaterials[2].albx = 2.0f, sphereMaterials[2].alby = 2.0f, sphereMaterials[2].albz = 2.0f;
+
+}
+
+void InitTris() {
+	const float WALL_SIZE = 10.0;
+	// Triangles are clockwise
+	//Back wall
+	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[0].type = DIFFUSE;
+	diffuseMaterials[0].albx = 0.6f, diffuseMaterials[0].alby = 0.6f, diffuseMaterials[0].albz = 0.6f;
+
+	tri[1] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[1].type = DIFFUSE;
+	diffuseMaterials[1].albx = 0.6f, diffuseMaterials[1].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
+
+
+	//// Floor
+	//tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[2].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[2] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[2].type = DIFFUSE;
+	diffuseMaterials[2].albx = 1.0f, diffuseMaterials[2].alby = 0.0f, diffuseMaterials[2].albz = 0.0f;
+
+	//tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	//tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	tri[3] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[3].type = DIFFUSE;
+	diffuseMaterials[3].albx = 1.0f, diffuseMaterials[3].alby = 0.0f, diffuseMaterials[3].albz = 0.0f;
+
+
+	//// Left wall
+	//tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[4].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	//tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[4] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[4].type = DIFFUSE;
+	diffuseMaterials[4].albx = 0.0f, diffuseMaterials[4].alby = 1.0f, diffuseMaterials[4].albz = 0.0f;
+
+	//tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	//tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	//tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[5] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[5].type = DIFFUSE;
+	diffuseMaterials[5].albx = 0.0f, diffuseMaterials[5].alby = 1.0f, diffuseMaterials[5].albz = 0.0f;
+
+	//// Right wall
+	//tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
+	//tri[6].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	tri[6] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[6].type = DIFFUSE;
+	diffuseMaterials[6].albx = 0.0f, diffuseMaterials[6].alby = 0.0f, diffuseMaterials[6].albz = 1.0f;
+
+	//tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	//tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[7] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[7].type = DIFFUSE;
+	diffuseMaterials[7].albx = 0.0f, diffuseMaterials[7].alby = 0.0f, diffuseMaterials[7].albz = 1.0f;
+
+	//// Ceiling
+	//tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	//tri[8].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	//tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[8] = { -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
+	diffuseMaterials[8].type = DIFFUSE;
+	diffuseMaterials[8].albx = 1.0f, diffuseMaterials[8].alby = 0.0f, diffuseMaterials[8].albz = 1.0f;
+
+	//tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
+	//tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	//tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[9] = { WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[9].type = DIFFUSE;
+	diffuseMaterials[9].albx = 1.0f, diffuseMaterials[9].alby = 0.0f, diffuseMaterials[9].albz = 1.0f;
+
+	//// Back wall
+	//tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[10] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[10].type = DIFFUSE;
+	diffuseMaterials[10].albx = 0.6f, diffuseMaterials[10].alby = 0.6f, diffuseMaterials[10].albz = 0.6f;
+
+	//tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	//tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	//tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	tri[11] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	diffuseMaterials[11].type = DIFFUSE;
+	diffuseMaterials[11].albx = 0.6f, diffuseMaterials[11].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
+}
+
+void InitOpenCL() {
+	InitSpheres();
+	InitTris();
+
+	float3 camera(0, 0, -9);
+	float3 p0(-1, 1, -8), p1(1, 1, -8), p2(-1, -1, -8);
+	if (!kernel)
+	{
+		Kernel::InitCL();
+
+		kernel = new Kernel("cl/megakernel.cl", "render");
+		clbuf_r = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_r, Buffer::DEFAULT);
+		clbuf_g = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_g, Buffer::DEFAULT);
+		clbuf_b = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_b, Buffer::DEFAULT);
+
+		clbuf_spheres = new Buffer(NS * sizeof(Sphere), spheres, Buffer::DEFAULT);
+		clbuf_tris = new Buffer(N * sizeof(Tri), tri, Buffer::DEFAULT);
+		clbuf_mat_sphere = new Buffer(NS * sizeof(DiffuseMat), sphereMaterials, Buffer::DEFAULT);
+		clbuf_mat_tri = new Buffer(N * sizeof(DiffuseMat), diffuseMaterials, Buffer::DEFAULT);
+	}
+	kernel->SetArguments(clbuf_r, clbuf_g, clbuf_b, clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2);
+	clbuf_r->CopyToDevice();
+	clbuf_g->CopyToDevice();
+	clbuf_b->CopyToDevice();
+	clbuf_spheres->CopyToDevice();
+	clbuf_tris->CopyToDevice();
+	clbuf_mat_sphere->CopyToDevice();
+	clbuf_mat_tri->CopyToDevice();
+
+}
+#endif
+
+
+void Assignment2MegakernelApp::Init()
+{
+#ifdef GPGPU
+	InitOpenCL();
+#endif
+#ifdef CPU
+	InitCPU();
+#endif
+}
+
+
+void Assignment2MegakernelApp::TickOpenCL() {
+	// draw the scene
+	screen->Clear(0);
+	// define the corners of the screen in worldspace
+
+	//Ray ray;
+	//Timer t;
+
+	kernel->Run(SCRWIDTH * SCRHEIGHT);
+	clbuf_r->CopyFromDevice();
+	clbuf_g->CopyFromDevice();
+	clbuf_b->CopyFromDevice();
+
+
+	//cout << cl_r[0] << endl;
+	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++) {
+		uint idx = y * SCRWIDTH + x;
+		//if (cl_r[idx] > 0) cout << "aa" << endl;
+		screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
+	}
+	cout << "rendered 1 frame" << endl;
+	//float elapsed = t.elapsed() * 1000;
+	//printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+}
+
+
+void Assignment2MegakernelApp::Tick(float deltaTime)
+{
+#ifdef GPGPU
+	TickOpenCL();
+#endif
+#ifdef CPU
+	TickCPU();
+#endif
+
+
+}
