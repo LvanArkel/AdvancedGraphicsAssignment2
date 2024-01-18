@@ -14,9 +14,10 @@
 TheApp* CreateApp() { return new Assignment2CPUApp(); }
 
 // triangle count
-#define N	12
+#define N	10
 #define NS  3
-#define SAMPLES_PER_PIXEL 20
+#define SAMPLES_PER_PIXEL 10
+#define USE_NEE
 
 // forward declarations
 
@@ -59,8 +60,14 @@ struct Hit {
 Tri tri[N];
 Material triangleMaterials[N];
 
+int triangleLightSize;
+uint triangleLights[N];
+
 Sphere spheres[NS];
 Material sphereMaterials[NS];
+
+int sphereLightSize;
+uint sphereLights[NS];
 
 // functions
 
@@ -97,14 +104,49 @@ void IntersectSphere(Ray& ray, const Sphere& sphere) {
 float3 UniformSampleHemisphere(float3 normal) {
 	float3 result;
 	do {
-		result = float3(RandomFloat()*2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f, RandomFloat() * 2.0f - 0.5f);
-	} while (length(result) > 1);
+		result = float3(RandomFloat()*2.0f - 1.0f, RandomFloat() * 2.0f - 1.0f, RandomFloat() * 2.0f - 1.0f);
+	} while (sqrLength(result) > 1);
 	if (dot(result, normal) < 0) {
 		result = -result;
 	}
 	// Normalize result
 	return normalize(result);
 }
+
+struct LightCheck {
+	Material light;
+	float3 L; // Normalized
+	float3 Nl; // Normalized
+	float dist;
+	float A;
+};
+
+LightCheck RandomPointOnLight(float3 src) {
+	int totalLights = triangleLightSize + sphereLightSize;
+	int selectedLight = (int) (RandomFloat() * totalLights);
+	LightCheck lightCheck;
+	if (selectedLight < triangleLightSize) {
+		// Selecting triangle
+		// TODO: Implement triangle light
+		exit(-1);
+	}
+	else {
+		// Selecting sphere
+		selectedLight -= triangleLightSize;
+		Sphere selectedSphere = spheres[sphereLights[selectedLight]];
+		float3 direction = src - selectedSphere.origin;
+		float3 I = UniformSampleHemisphere(direction);
+		float3 intersectDirection = I - src;
+		lightCheck.light = sphereMaterials[sphereLights[selectedLight]];
+		lightCheck.L = normalize(intersectDirection);
+		lightCheck.Nl = normalize(I - selectedSphere.origin);
+		lightCheck.dist = length(intersectDirection);
+		lightCheck.A = 2 * PI * selectedSphere.radius * selectedSphere.radius;
+	}
+	return lightCheck;
+}
+
+
 
 // Traces the ray throughout the scene, testing intersections with triangles and spheres.
 // Updates the distance of the ray while tracing.
@@ -154,13 +196,14 @@ Hit Trace(Ray& ray) {
 
 const float invPI = 1 / PI;
 
-float3 Sample(Ray& ray, int depth) {
-	if (depth > 50) {
+float3 Sample(Ray& ray, int depth, bool lastSpecular) {
+	if (depth > 10) {
 		return float3(0.0f);
 	}
 	// Trace ray
 	Hit hit = Trace(ray);
 	float3 normal = normalize(hit.normal);
+	float3 I = ray.O + ray.t * ray.D;
 #if 0
 	// START DEBUG
 	if (hit.type == NOHIT) {
@@ -175,36 +218,61 @@ float3 Sample(Ray& ray, int depth) {
 	if (hit.type == NOHIT) {
 		return float3(0.0f);
 	}
+	float3 brdf = hit.material.albedo * invPI;
 	// Terminate if we hit a light source
 	if (hit.material.type == LIGHT) {
+#ifdef USE_NEE
+		if (lastSpecular) {
+			return hit.material.emittance;
+		}
+		else {
+			return float3(0.0f);
+		}
+#else
 		return hit.material.emittance;
+#endif
 	}
+#ifndef USE_NEE
 	if (hit.material.type == MIRROR) {
 		// Continue in fixed direction
 		Ray newRay;
-		newRay.O = ray.O + ray.t * ray.D;
+		newRay.O = I;
 		newRay.D = normalize(reflect(ray.D, normal));
-		float3 newSample = Sample(newRay, depth + 1);
-		return float3(
-			hit.material.albedo.x * newSample.x,
-			hit.material.albedo.y * newSample.y,
-			hit.material.albedo.z * newSample.z
+		return hit.material.albedo * Sample(newRay, depth + 1, false);
+	}
+#else
+	if (hit.material.type == MIRROR) {
+		exit(-1);
+	}
+#endif
+	float3 Ld = 0;
+#ifdef USE_NEE
+	// Sample a random light source
+	LightCheck lightHit = RandomPointOnLight(I);
+	Ray shadowRay;
+	shadowRay.O = I;
+	shadowRay.D = lightHit.L;
+	shadowRay.t = lightHit.dist;
+	// Cast shadow ray
+	Trace(shadowRay);
+	if (dot(normal, lightHit.L) > 0 && dot(lightHit.Nl, -lightHit.L) > 0) if (shadowRay.t == lightHit.dist) {
+		float solidAngle = (dot(lightHit.Nl, -lightHit.L) * lightHit.A) / (lightHit.dist * lightHit.dist);
+		Ld = lightHit.light.emittance * solidAngle * dot(normal, lightHit.L) * (triangleLightSize + sphereLightSize);
+		Ld = float3(
+			brdf.x * Ld.x,
+			brdf.y * Ld.y,
+			brdf.z * Ld.z
 		);
 	}
+#endif
 	// Continue in random direction
 	float3 newDirection = UniformSampleHemisphere(normal); // Normalized
 	Ray newRay;
-	newRay.O = ray.O + ray.t * ray.D;
+	newRay.O = I;
 	newRay.D = newDirection;
 	// Update throughput
-	float3 brdf = hit.material.albedo * invPI;
-	float3 partialIrradiance = 2.0f * PI * dot(normal, newDirection) * brdf;
-	float3 newSample = Sample(newRay, depth + 1);
-	return float3(
-		partialIrradiance.x * newSample.x,
-		partialIrradiance.y * newSample.y,
-		partialIrradiance.z * newSample.z
-	);
+	float3 Ei = Sample(newRay, depth + 1, false) * dot(normal, newDirection);
+	return PI * 2.0f * brdf * Ei + Ld;
 }
 
 void Assignment2CPUApp::Init()
@@ -218,85 +286,73 @@ void Assignment2CPUApp::Init()
 	tri[0].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[0].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	triangleMaterials[0].type = DIFFUSE;
-	triangleMaterials[0].albedo = float3(0.6f);
+	triangleMaterials[0].albedo = float3(1.0f);
 	tri[1].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[1].vertex1 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[1].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	triangleMaterials[1].type = DIFFUSE;
-	triangleMaterials[1].albedo = float3(0.6f);
+	triangleMaterials[1].albedo = float3(1.0f);
 
 	// Floor
 	tri[2].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[2].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[2].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	triangleMaterials[2].type = DIFFUSE;
-	triangleMaterials[2].albedo = float3(1.0f, 0.0f, 0.0f);
+	triangleMaterials[2].albedo = float3(1.0f);
 	tri[3].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[3].vertex1 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[3].vertex2 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	triangleMaterials[3].type = DIFFUSE;
-	triangleMaterials[3].albedo = float3(1.0f, 0.0f, 0.0f);
+	triangleMaterials[3].albedo = float3(1.0f);
 
 	// Left wall
 	tri[4].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[4].vertex2 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[4].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	triangleMaterials[4].type = DIFFUSE;
-	triangleMaterials[4].albedo = float3(0.0f, 1.0f, 0.0f);
+	triangleMaterials[4].albedo = float3(1.0f, 0.0f, 0.0f);
 	tri[5].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[5].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[5].vertex2 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	triangleMaterials[5].type = DIFFUSE;
-	triangleMaterials[5].albedo = float3(0.0f, 1.0f, 0.0f);
+	triangleMaterials[5].albedo = float3(1.0f, 0.0f, 0.0f);
 
 	// Right wall
 	tri[6].vertex0 = float3(WALL_SIZE, -WALL_SIZE, WALL_SIZE);
 	tri[6].vertex2 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[6].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	triangleMaterials[6].type = DIFFUSE;
-	triangleMaterials[6].albedo = float3(0.0f, 0.0f, 1.0f);
+	triangleMaterials[6].albedo = float3(0.0f, 1.0f, 0.0f);
 	tri[7].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 	tri[7].vertex1 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[7].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	triangleMaterials[7].type = DIFFUSE;
-	triangleMaterials[7].albedo = float3(0.0f, 0.0f, 1.0f);
+	triangleMaterials[7].albedo = float3(0.0f, 1.0f, 0.0f);
 
 	// Ceiling
 	tri[8].vertex0 = float3(-WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[8].vertex2 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[8].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	triangleMaterials[8].type = DIFFUSE;
-	triangleMaterials[8].albedo = float3(1.0f, 0.0f, 1.0f);
+	triangleMaterials[8].albedo = float3(1.0f);
 	tri[9].vertex0 = float3(WALL_SIZE, WALL_SIZE, WALL_SIZE);
 	tri[9].vertex1 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	tri[9].vertex2 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
 	triangleMaterials[9].type = DIFFUSE;
-	triangleMaterials[9].albedo = float3(1.0f, 0.0f, 1.0f);
-
-	// Back wall
-	tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[10].type = DIFFUSE;
-	triangleMaterials[10].albedo = float3(0.6f);
-	tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	triangleMaterials[11].type = DIFFUSE;
-	triangleMaterials[11].albedo = float3(0.6f);
+	triangleMaterials[9].albedo = float3(1.0f);
 
 	// Left ball
 	const float S1_R = 2.0f;
-	spheres[0].origin = float3(-S1_R*1.5f, -WALL_SIZE + S1_R*0.5f, WALL_SIZE*0.5f);
+	spheres[0].origin = float3(-S1_R*1.5f, -WALL_SIZE + S1_R, WALL_SIZE*0.5f);
 	spheres[0].radius = S1_R;
 	sphereMaterials[0].type = DIFFUSE;
 	sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
 
 	// Right ball
 	const float S2_R = 2.0f;
-	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R * 0.5f, WALL_SIZE * 0.5f);
+	spheres[1].origin = float3(S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f);
 	spheres[1].radius = S2_R;
-	sphereMaterials[1].type = MIRROR;
+	sphereMaterials[1].type = DIFFUSE;
 	sphereMaterials[1].albedo = float3(0.0f, 1.0f, 1.0f);
 
 	// Lamp
@@ -305,6 +361,20 @@ void Assignment2CPUApp::Init()
 	spheres[2].radius = L_R;
 	sphereMaterials[2].type = LIGHT;
 	sphereMaterials[2].emittance = float3(5.0f);
+
+	// Add all lights to buffer
+	for (int i = 0; i < N; i++) {
+		Material material = triangleMaterials[i];
+		if (material.type == LIGHT) {
+			triangleLights[triangleLightSize++] = i;
+		}
+	}
+	for (int i = 0; i < NS; i++) {
+		Material material = sphereMaterials[i];
+		if (material.type == LIGHT) {
+			sphereLights[sphereLightSize++] = i;
+		}
+	}
 }
 
 void Assignment2CPUApp::Tick( float deltaTime )
@@ -312,8 +382,8 @@ void Assignment2CPUApp::Tick( float deltaTime )
 	// draw the scene
 	screen->Clear( 0 );
 	// define the corners of the screen in worldspace
-	float3 camera(0, 0, -9);
-	float3 p0( -1, 1, -8 ), p1( 1, 1, -8), p2( -1, -1, -8);
+	float3 camera(0, 0, -15);
+	float3 p0( -1, 1, -14 ), p1( 1, 1, -14), p2( -1, -1, -14);
 	Ray ray;
 	Timer t;
 	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++)
@@ -328,7 +398,7 @@ void Assignment2CPUApp::Tick( float deltaTime )
 			ray.D = normalize(pixelPos - ray.O);
 			// initially the ray has an 'infinite length'
 			ray.t = 1e30f;
-			accumulator += Sample(ray, 0);
+			accumulator += Sample(ray, 0, true);
 		}
 		float3 color = accumulator / (float) SAMPLES_PER_PIXEL;
 		uint r = (uint)(min(color.x, 1.0f) * 255.0);
