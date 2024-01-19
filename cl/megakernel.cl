@@ -112,7 +112,7 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 float3 UniformSampleHemisphere(float3 normal, uint* seed) {
 	float3 result;
 	do {
-		result = (float3)(RandomFloat(seed)*2.0f - 0.5f, RandomFloat(seed) * 2.0f - 0.5f, RandomFloat(seed) * 2.0f - 0.5f);
+		result = (float3)(RandomFloat(seed)*2.0f - 1.0f, RandomFloat(seed) * 2.0f - 1.0f, RandomFloat(seed) * 2.0f - 1.0f);
 	} while (length(result) > 1);
 	if (dot(result, normal) < 0) {
 		result = -result;
@@ -176,16 +176,17 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 }
 
 
-float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __global struct Tri* tri,
+float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct Tri* tri,
  __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials, uint* seed) {
 	float3 newSample = (float3)(1.0, 1.0, 1.0);
-
+	int depth = 0;
 	while (true) {
 		if (depth > 50) {
 			return (float3)(0.0f);
 		}
 
 		struct Hit hit = Trace(ray, spheres, tri, sphereMaterials, triMaterials);
+		float3 normal = normalize(hit.normal);
 
 		// if (hit.type == NOHIT) {
 		// 	return (float3)(0.0f);
@@ -220,7 +221,7 @@ float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __glo
 			float3 mat_emmitance = (float3)(x, y, z);
 			return mat_emmitance * newSample;
 		}
-		float3 newDirection = UniformSampleHemisphere(hit.normal, seed); // Normalized
+		float3 newDirection = UniformSampleHemisphere(normal, seed); // Normalized
 		struct Ray newRay;
 		newRay.O = ray->O + ray->t * ray->D;
 		newRay.D = newDirection;
@@ -229,7 +230,7 @@ float3 Sample(struct Ray* ray, int depth, __global struct Sphere* spheres, __glo
 
 		//return mat_albedo;
 
-		float3 partialIrradiance = 2.0f * M_PI_F * dot(normalize(hit.normal), newDirection) * brdf;
+		float3 partialIrradiance = 2.0f * M_PI_F * dot(normal, newDirection) * brdf;
 		//return newDirection;
 
 		//float3 newSample = Sample(newRay, depth + 1);
@@ -285,7 +286,7 @@ __kernel void render(__global int* r, __global int* g, __global int* b,
 		// initially the ray has an 'infinite length'
 		ray.t = 1e30f;
 
-		accumulator += Sample(&ray, 0, spheres, tri, sphereMaterials, triMaterials, &seed);
+		accumulator += Sample(&ray, spheres, tri, sphereMaterials, triMaterials, &seed);
 	}
 
 	float3 color = accumulator / SAMPLES_PER_PIXEL;

@@ -12,7 +12,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectName>Assignment2Wavefront</ProjectName>
-    <ProjectGuid>{5114BA01-269E-409B-B22D-88E91724CB71}</ProjectGuid>
+    <ProjectGuid>{06254474-984D-4525-902F-61E7B569F960}</ProjectGuid>
     <RootNamespace>Tmpl8</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
@@ -121,7 +121,7 @@
   </ItemDefinitionGroup>
   <!-- END Custom section -->
   <ItemGroup>
-    <ClCompile Include="Assignment2CPU.cpp" />
+    <ClCompile Include="Assignment2Wavefront.cpp" />
     <ClCompile Include="template\template.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">precomp.h</PrecompiledHeaderFile>
@@ -130,13 +130,17 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Assignment2CPU.h" />
+    <ClInclude Include="Assignment2Wavefront.h" />
     <ClInclude Include="cl\tools.cl" />
     <ClInclude Include="template\common.h" />
     <ClInclude Include="template\precomp.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cl\extendKernel.cl" />
+    <None Include="cl\finalizeKernel.cl" />
+    <None Include="cl\generateKernel.cl" />
     <None Include="cl\kernels.cl" />
+    <None Include="cl\shadeKernel.cl" />
     <None Include="README.md" />
     <None Include="template\LICENSE" />
   </ItemGroup>

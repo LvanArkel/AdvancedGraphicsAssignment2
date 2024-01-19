@@ -4,7 +4,7 @@
     <ClCompile Include="template\template.cpp">
       <Filter>template</Filter>
     </ClCompile>
-    <ClCompile Include="Assignment2CPU.cpp" />
+    <ClCompile Include="Assignment2Wavefront.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="template\common.h">
@@ -16,7 +16,7 @@
     <ClInclude Include="cl\tools.cl">
       <Filter>template\cl</Filter>
     </ClInclude>
-    <ClInclude Include="Assignment2CPU.h" />
+    <ClInclude Include="Assignment2Wavefront.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="template\LICENSE">
@@ -26,6 +26,18 @@
       <Filter>template</Filter>
     </None>
     <None Include="cl\kernels.cl">
+      <Filter>template\cl</Filter>
+    </None>
+    <None Include="cl\extendKernel.cl">
+      <Filter>template\cl</Filter>
+    </None>
+    <None Include="cl\generateKernel.cl">
+      <Filter>template\cl</Filter>
+    </None>
+    <None Include="cl\shadeKernel.cl">
+      <Filter>template\cl</Filter>
+    </None>
+    <None Include="cl\finalizeKernel.cl">
       <Filter>template\cl</Filter>
     </None>
   </ItemGroup>

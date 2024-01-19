@@ -3,7 +3,7 @@
 namespace Tmpl8
 {
 
-class Assignment2CPUApp : public TheApp
+class Assignment2WavefrontApp : public TheApp
 {
 public:
 	// game flow methods
