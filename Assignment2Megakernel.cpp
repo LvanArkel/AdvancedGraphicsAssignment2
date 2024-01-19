@@ -15,11 +15,17 @@ TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 
 #define GPGPU
 //#define CPU
+//#define ANALYZE_RESULTS
 
 #define N	12 // triangle count
 #define NS  3 //sphere count
 #define SAMPLES_PER_PIXEL 10
 
+#ifdef ANALYZE_RESULTS
+ofstream timefile;
+const string filename = "analyze.csv";
+uint frameidx = 0;
+#endif
 
 static Kernel* kernel = 0; //megakernel
 static Buffer* clbuf_r = 0; // buffer for color r channel
@@ -555,6 +561,12 @@ void InitTris() {
 }
 
 void InitOpenCL() {
+#ifdef ANALYZE_RESULTS
+	timefile.open(filename.c_str());
+	timefile << "frameidx," << "time," << "rays" << "\n";
+	timefile.close();
+#endif
+
 	InitSpheres();
 	InitTris();
 
@@ -601,10 +613,11 @@ void Assignment2MegakernelApp::Init()
 void Assignment2MegakernelApp::TickOpenCL() {
 	// draw the scene
 	screen->Clear(0);
+
 	// define the corners of the screen in worldspace
 
 	//Ray ray;
-	//Timer t;
+	Timer t;
 
 	kernel->Run(SCRWIDTH * SCRHEIGHT);
 	clbuf_r->CopyFromDevice();
@@ -618,9 +631,17 @@ void Assignment2MegakernelApp::TickOpenCL() {
 		//if (cl_r[idx] > 0) cout << "aa" << endl;
 		screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
 	}
-	cout << "rendered 1 frame" << endl;
-	//float elapsed = t.elapsed() * 1000;
-	//printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+	//cout << "rendered 1 frame" << endl;
+	float elapsed = t.elapsed() * 1000;
+	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+
+#ifdef ANALYZE_RESULTS
+	timefile.open(filename.c_str(), std::ios_base::app);
+	timefile << frameidx << "," << elapsed <<  "," << sqr(630) / elapsed << "\n";
+	timefile.close();
+	frameidx++;
+#endif
+
 }
 
 
