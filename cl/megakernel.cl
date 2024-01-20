@@ -181,7 +181,7 @@ float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct 
 	float3 newSample = (float3)(1.0, 1.0, 1.0);
 	int depth = 0;
 	while (true) {
-		if (depth > 50) {
+		if (depth > 1) {
 			return (float3)(0.0f);
 		}
 
@@ -231,7 +231,7 @@ float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct 
 		//return mat_albedo;
 
 		float3 partialIrradiance = 2.0f * M_PI_F * dot(normal, newDirection) * brdf;
-		//return newDirection;
+		//return partialIrradiance;
 
 		//float3 newSample = Sample(newRay, depth + 1);
 

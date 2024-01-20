@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 //#define NS  3
 #define N 12
 #define NS 2
-#define SAMPLES_PER_PIXEL 4
+#define SAMPLES_PER_PIXEL 1
 //#define USE_NEE
 
 // forward declarations
@@ -103,34 +103,34 @@ void initWalls() {
 	// Triangles are clockwise
 
 	// Back wall
-	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[0] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
+	triangleMaterials[0] = { MaterialType::DIFFUSE, 0.6f, 0.6f, 0.6f };
 	tri[1] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[1] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[1] = { MaterialType::DIFFUSE, 0.6f, 0.6f, 0.6f };
 
 	// Floor
-	tri[2] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE };
-	triangleMaterials[2] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	tri[2] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
+	triangleMaterials[2] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
 	tri[3] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
-	triangleMaterials[3] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[3] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
 
 	// Left wall
-	tri[4] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[4] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
+	tri[4] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE };
+	triangleMaterials[4] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
 	tri[5] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[5] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
+	triangleMaterials[5] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
 
 	// Right wall
-	tri[6] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[6] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
+	tri[6] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
+	triangleMaterials[6] = { MaterialType::DIFFUSE, 0.0f, 0.0f, 1.0f };
 	tri[7] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[7] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
+	triangleMaterials[7] = { MaterialType::DIFFUSE, 0.0f, 0.0f, 1.0f };
 
 	// Ceiling
 	tri[8] = { -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[8] = { MaterialType::DIFFUSE, 0.8f, 0.8f, 0.8f };
+	triangleMaterials[8] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 1.0f };
 	tri[9] = { WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[9] = { MaterialType::DIFFUSE, 0.8f, 0.8f, 0.8f };
+	triangleMaterials[9] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 1.0f };
 }
 
 void initSpheres() {
@@ -142,7 +142,7 @@ void initSpheres() {
 	// Right ball
 	const float S2_R = 2.0f;
 	spheres[1] = { S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f, S2_R };
-	sphereMaterials[1] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	sphereMaterials[1] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 1.0f };
 
 }
 
@@ -221,6 +221,20 @@ void InitBuffers(Surface *screen) {
 		clbuf_rays,
 		clbuf_accumulator
 	);
+	//extendKernel->SetArguments(
+	//	clbuf_tris, N,
+	//	clbuf_spheres, NS,
+	//	clbuf_mat_tris, clbuf_mat_spheres,
+	//	clbuf_rays,
+	//	clbuf_hits
+	//);
+	//shadeKernel->SetArguments(
+	//	clbuf_rays,
+	//	clbuf_hits,
+	//	clbuf_rand_seed,
+	//	clbuf_accumulator
+	//);
+
 	extendKernel->SetArguments(
 		clbuf_tris, N,
 		clbuf_spheres, NS,
@@ -232,6 +246,8 @@ void InitBuffers(Surface *screen) {
 		clbuf_rays,
 		clbuf_hits,
 		clbuf_rand_seed,
+		clbuf_new_rays,
+		clbuf_active_rays,
 		clbuf_accumulator
 	);
 	finalizeKernel->SetArguments(
@@ -270,20 +286,20 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 
 	int i;
 	for (i = 0; i < maxDepth; i++) {
-		extendKernel->SetArguments(
-			clbuf_tris, N,
-			clbuf_spheres, NS,
-			clbuf_mat_tris, clbuf_mat_spheres,
-			clbuf_rays,
-			clbuf_hits
-		);
-		shadeKernel->SetArguments(
-			clbuf_rays,
-			clbuf_hits,
-			clbuf_new_rays,
-			clbuf_active_rays,
-			clbuf_accumulator
-		);
+		//extendKernel->SetArguments(
+		//	clbuf_tris, N,
+		//	clbuf_spheres, NS,
+		//	clbuf_mat_tris, clbuf_mat_spheres,
+		//	clbuf_rays,
+		//	clbuf_hits
+		//);
+		//shadeKernel->SetArguments(
+		//	clbuf_rays,
+		//	clbuf_hits,
+		//	clbuf_new_rays,
+		//	clbuf_active_rays,
+		//	clbuf_accumulator
+		//);
 
 		int activeThreads = activeRays;
 		activeRays = 0;
@@ -291,15 +307,16 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 		extendKernel->Run(activeThreads);
 
 		clbuf_active_rays->CopyToDevice();
+
 		shadeKernel->Run(activeThreads);
 		clbuf_active_rays->CopyFromDevice();
 		printf("Active rays: %d\n", activeRays);
 
-		swap(clbuf_rays, clbuf_new_rays);
+		//swap(clbuf_rays, clbuf_new_rays);
 	}
-	if (i % 2 == 1) {
-		swap(clbuf_rays, clbuf_new_rays);
-	}
+	//if (i % 2 == 1) {
+	//	swap(clbuf_rays, clbuf_new_rays);
+	//}
 
 
 	finalizeKernel->Run(SCRWIDTH * SCRHEIGHT);

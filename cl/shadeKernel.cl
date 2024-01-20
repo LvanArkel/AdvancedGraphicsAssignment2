@@ -37,7 +37,7 @@ __kernel void shade(
     //In
     __global struct Ray *rays, 
     __global struct Hit *hits,
-    __global uint *seeds
+    __global uint *seeds,
     //Out
     __global struct Ray* newRays,
     __global volatile uint *newRayCounter,
@@ -51,6 +51,12 @@ __kernel void shade(
     struct Ray ray = rays[threadIdx];
     struct Hit hit = hits[threadIdx];
 
+    // accumulators[3*ray.startThreadId] = 0.0f;
+    // accumulators[3*ray.startThreadId+1] = 0.0f;
+    // accumulators[3*ray.startThreadId+2] = 1.0f;
+
+    // return;
+
     if (hit.type != HIT_NOHIT) {
         if (hit.material.type == MAT_LIGHT) {
             accumulators[3*ray.startThreadId] *= hit.material.albedoX;
@@ -60,8 +66,10 @@ __kernel void shade(
         }
 
         //TODO: Add randomness
-        float3 N = normalize(HitNormal(&hit));
-        uint seed =  WangHash( (threadIdx+1)*17 );
+        float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
+        float3 N = normalize(hit_normal);
+        uint seed =  seeds[threadIdx];
+        seeds[threadIdx] = seed;
         float3 newRayD = UniformSampleHemisphere(N, &seed);
         struct Ray newRay;
         SetRayD(&newRay, newRayD);
@@ -71,6 +79,9 @@ __kernel void shade(
         accumulators[3*ray.startThreadId] *= irradiance.x;
         accumulators[3*ray.startThreadId+1] *= irradiance.y;
         accumulators[3*ray.startThreadId+2] *= irradiance.z;
+        // accumulators[3*ray.startThreadId] = irradiance.x;
+        // accumulators[3*ray.startThreadId+1] = irradiance.y;
+        // accumulators[3*ray.startThreadId+2] = irradiance.z;
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;
@@ -80,8 +91,8 @@ __kernel void shade(
             accumulators[3*ray.startThreadId+2] = 0.0f;
     }
 
-    seeds[threadIdx] = seed;
-    return;
+
+    //return;
 
     // if (hit.type == HIT_NOHIT) {
     //     accumulators[3*ray.pixelIdx] *= 0;
