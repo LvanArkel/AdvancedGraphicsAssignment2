@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 //#define NS  3
 #define N 12
 #define NS 2
-#define SAMPLES_PER_PIXEL 2
+#define SAMPLES_PER_PIXEL 4
 //#define USE_NEE
 
 // forward declarations
@@ -58,6 +58,8 @@ Material sphereMaterials[NS];
 int sphereLightSize;
 uint sphereLights[NS];
 
+uint activeRays = 0;
+
 static Kernel* generateKernel;
 static Kernel* extendKernel;
 static Kernel* shadeKernel;
@@ -70,11 +72,14 @@ static Buffer* clbuf_mat_spheres;
 
 static Buffer* clbuf_rays;
 static Buffer* clbuf_hits;
+static Buffer* clbuf_new_rays;
 
 static Buffer* clbuf_accumulator;
 static Buffer* clbuf_pixels;
 
 const float WALL_SIZE = 10.0;
+
+static Buffer* clbuf_active_rays;
 
 void initWalls() {
 	// Triangles are clockwise
@@ -105,9 +110,9 @@ void initWalls() {
 
 	// Ceiling
 	tri[8] = { -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[8] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[8] = { MaterialType::DIFFUSE, 0.8f, 0.8f, 0.8f };
 	tri[9] = { WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[9] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[9] = { MaterialType::DIFFUSE, 0.8f, 0.8f, 0.8f };
 }
 
 void initSpheres() {
@@ -119,7 +124,7 @@ void initSpheres() {
 	// Right ball
 	const float S2_R = 2.0f;
 	spheres[1] = { S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f, S2_R };
-	sphereMaterials[1] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 1.0f };
+	sphereMaterials[1] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 
 }
 
@@ -132,9 +137,9 @@ void initLights() {
 	//sphereMaterials[2].emittance = float3(5.0f);
 	const float L_S = 4.0f;
 	tri[10] = { -L_S, WALL_SIZE - 0.05f, L_S, L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[10] = { LIGHT, 0.5f, 4.0f, 4.0f };
+	triangleMaterials[10] = { LIGHT, 1.0f, 1.0f, 1.0f};
 	tri[11] = { L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S, L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[11] = { LIGHT, 0.5f, 4.0f, 4.0f };
+	triangleMaterials[11] = { LIGHT, 1.0f, 1.0f, 1.0f };
 
 	// Add all lights to buffer
 	for (int i = 0; i < N; i++) {
@@ -182,10 +187,12 @@ void InitBuffers(Surface *screen) {
 	clbuf_mat_spheres = new Buffer(NS * GPUMaterialByteSize, sphereMaterials, Buffer::READONLY);
 	
 	clbuf_rays = new Buffer(rayBufferSize * GPURayByteSize);
-	//clbuf_new_rays = new Buffer(rayBufferSize * GPURayByteSize);
 	clbuf_hits = new Buffer(rayBufferSize * GPUHitByteSize);
+	clbuf_new_rays = new Buffer(rayBufferSize * GPURayByteSize);
+
+	clbuf_active_rays = new Buffer(sizeof(uint), &activeRays, Buffer::DEFAULT);
 	
-	clbuf_accumulator = new Buffer(SCRWIDTH * SCRHEIGHT * 3*sizeof(float));
+	clbuf_accumulator = new Buffer(rayBufferSize * 3 * sizeof(float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
 	generateKernel->SetArguments(
@@ -194,22 +201,11 @@ void InitBuffers(Surface *screen) {
 		clbuf_rays,
 		clbuf_accumulator
 	);
-	extendKernel->SetArguments(
-		clbuf_tris, N,
-		clbuf_spheres, NS,
-		clbuf_mat_tris, clbuf_mat_spheres,
-		clbuf_rays,
-		clbuf_hits
-	);
-	shadeKernel->SetArguments(
-		clbuf_rays,
-		clbuf_hits,
-		clbuf_accumulator
-	);
 	finalizeKernel->SetArguments(
 		clbuf_pixels,
 		clbuf_accumulator,
-		1.0f / ((float)SAMPLES_PER_PIXEL)
+		SCRWIDTH*SCRHEIGHT,
+		SAMPLES_PER_PIXEL
 	);
 
 	clbuf_tris->CopyToDevice();
@@ -231,14 +227,49 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 	
 	Timer t;
 	
-	int activeThreads = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
+	activeRays = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
+	//const int lowerRayBound = activeRays / 100;
+	const int maxDepth = 10;
 
-	generateKernel->Run(activeThreads);
-	extendKernel->Run(activeThreads);
-	shadeKernel->Run(activeThreads);
+	generateKernel->Run(activeRays);
+
+	int i;
+	for (i = 0; i < maxDepth; i++) {
+		extendKernel->SetArguments(
+			clbuf_tris, N,
+			clbuf_spheres, NS,
+			clbuf_mat_tris, clbuf_mat_spheres,
+			clbuf_rays,
+			clbuf_hits
+		);
+		shadeKernel->SetArguments(
+			clbuf_rays,
+			clbuf_hits,
+			clbuf_new_rays,
+			clbuf_active_rays,
+			clbuf_accumulator
+		);
+
+		int activeThreads = activeRays;
+		activeRays = 0;
+
+		extendKernel->Run(activeThreads);
+
+		clbuf_active_rays->CopyToDevice();
+		shadeKernel->Run(activeThreads);
+		clbuf_active_rays->CopyFromDevice();
+		printf("Active rays: %d\n", activeRays);
+
+		swap(clbuf_rays, clbuf_new_rays);
+	}
+	if (i % 2 == 1) {
+		swap(clbuf_rays, clbuf_new_rays);
+	}
+
+
 	finalizeKernel->Run(SCRWIDTH * SCRHEIGHT);
-
 	clbuf_pixels->CopyFromDevice();
+
 
 	float elapsed = t.elapsed() * 1000;
 	printf( "tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr( 630 ) / elapsed );
