@@ -58,6 +58,8 @@ Material sphereMaterials[NS];
 int sphereLightSize;
 uint sphereLights[NS];
 
+uint seeds[SCRWIDTH * SCRHEIGHT];
+
 static Kernel* generateKernel;
 static Kernel* extendKernel;
 static Kernel* shadeKernel;
@@ -74,7 +76,24 @@ static Buffer* clbuf_hits;
 static Buffer* clbuf_accumulator;
 static Buffer* clbuf_pixels;
 
+static Buffer* clbuf_rand_seed = 0;
+
 const float WALL_SIZE = 10.0;
+
+uint WangHash(uint s)
+{
+	s = (s ^ 61) ^ (s >> 16);
+	s *= 9, s = s ^ (s >> 4);
+	s *= 0x27d4eb2d;
+	s = s ^ (s >> 15);
+	return s;
+}
+
+void InitSeeds() {
+	for (int i = 0; i < SCRWIDTH * SCRHEIGHT; i++) {
+		seeds[i] = WangHash((i + 1) * 17);
+	}
+}
 
 void initWalls() {
 	// Triangles are clockwise
@@ -188,6 +207,8 @@ void InitBuffers(Surface *screen) {
 	clbuf_accumulator = new Buffer(SCRWIDTH * SCRHEIGHT * 3*sizeof(float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
+	clbuf_rand_seed = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), seeds, Buffer::DEFAULT);
+
 	generateKernel->SetArguments(
 		SCRWIDTH, SCRHEIGHT,
 		camera, p0, p1, p2,
@@ -204,7 +225,8 @@ void InitBuffers(Surface *screen) {
 	shadeKernel->SetArguments(
 		clbuf_rays,
 		clbuf_hits,
-		clbuf_accumulator
+		clbuf_accumulator,
+		clbuf_rand_seed
 	);
 	finalizeKernel->SetArguments(
 		clbuf_pixels,
@@ -216,11 +238,13 @@ void InitBuffers(Surface *screen) {
 	clbuf_mat_tris->CopyToDevice();
 	clbuf_spheres->CopyToDevice();
 	clbuf_mat_spheres->CopyToDevice();
+	clbuf_rand_seed->CopyToDevice();
 }
 
 void Assignment2WavefrontApp::Init()
 {
 	InitScene();
+	InitSeeds();
 	InitBuffers(screen);
 }
 

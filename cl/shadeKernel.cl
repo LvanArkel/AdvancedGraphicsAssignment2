@@ -28,9 +28,13 @@ float3 UniformSampleHemisphere(float3 normal, uint* seed) {
 __kernel void shade(
     __global struct Ray *rays, 
     __global struct Hit *hits,
-    __global float *accumulators
+    __global float *accumulators,
+    __global uint *seeds
 ) {
     int threadIdx = get_global_id(0);
+
+    uint seed = seeds[threadIdx];
+
 
     struct Ray ray = rays[threadIdx];
     struct Hit hit = hits[threadIdx];
@@ -48,6 +52,8 @@ __kernel void shade(
         accumulators[3*ray.pixelIdx+1] += hit.material.albedoY;
         accumulators[3*ray.pixelIdx+2] += hit.material.albedoZ;
     }
+
+    seeds[threadIdx] = seed;
     return;
 
     // if (hit.type == HIT_NOHIT) {
