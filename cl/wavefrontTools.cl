@@ -13,7 +13,7 @@ struct Ray {
     float Ox, Oy, Oz;
     float Dx, Dy, Dz;
     float t;
-    int pixelIdx;
+    int startThreadId;
 };
 
 float3 RayO(struct Ray* ray) {

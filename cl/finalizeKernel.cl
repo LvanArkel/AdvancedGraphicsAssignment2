@@ -3,13 +3,23 @@
 __kernel void finalize(
     __global int* pixels,
     __global float* accumulators,
-    const float inverseSamples
+    const int image_size,
+    const int samples
 ) {
     int threadIdx = get_global_id(0);
 
-    float r = accumulators[3*threadIdx] * inverseSamples;
-    float g = accumulators[3*threadIdx+1] * inverseSamples;
-    float b = accumulators[3*threadIdx+2] * inverseSamples;
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    for (int i = 0; i < samples; i++) {
+        r += accumulators[3*(threadIdx + image_size*i)];
+        g += accumulators[3*(threadIdx + image_size*i)+1];
+        b += accumulators[3*(threadIdx + image_size*i)+2];
+    }
+    float invSamples = 1 / (float)samples;
+    r *= invSamples;
+    g *= invSamples;
+    b *= invSamples;
 
     struct Hit hit;
 
