@@ -229,7 +229,7 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 	
 	activeRays = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
 	//const int lowerRayBound = activeRays / 100;
-	const int maxDepth = 10;
+	const int maxDepth = 1;
 
 	generateKernel->Run(activeRays);
 
