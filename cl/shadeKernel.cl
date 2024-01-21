@@ -74,6 +74,8 @@ __kernel void shade(
         struct Ray newRay;
         SetRayD(&newRay, newRayD);
         SetRayO(&newRay, RayO(&ray) + ray.t * RayD(&ray));
+        newRay.t = 1e30f;
+        newRay.startThreadId = ray.startThreadId;
         float3 brdf = MaterialAlbedo(&hit.material) * M_1_PI_F;
         float3 irradiance = M_PI_F * 2.0f * brdf * dot(N, newRayD);
         accumulators[3*ray.startThreadId] *= irradiance.x;
