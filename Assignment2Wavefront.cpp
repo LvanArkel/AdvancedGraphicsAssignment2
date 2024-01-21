@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 #define NS  3
 //#define N 12
 //#define NS 2
-#define SAMPLES_PER_PIXEL 50
+#define SAMPLES_PER_PIXEL 100
 //#define USE_NEE
 
 // forward declarations
@@ -110,33 +110,33 @@ void initWalls() {
 
 	// Back wall
 	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
-	triangleMaterials[0] = { MaterialType::DIFFUSE, 0.6f, 0.6f, 0.6f };
+	triangleMaterials[0] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 	tri[1] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[1] = { MaterialType::DIFFUSE, 0.6f, 0.6f, 0.6f };
+	triangleMaterials[1] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 
 	// Floor
 	tri[2] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[2] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
+	triangleMaterials[2] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 	tri[3] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
-	triangleMaterials[3] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
+	triangleMaterials[3] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 
 	// Left wall
 	tri[4] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE };
-	triangleMaterials[4] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
+	triangleMaterials[4] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
 	tri[5] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[5] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
+	triangleMaterials[5] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 0.0f };
 
 	// Right wall
 	tri[6] = { WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[6] = { MaterialType::DIFFUSE, 0.0f, 0.0f, 1.0f };
+	triangleMaterials[6] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
 	tri[7] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[7] = { MaterialType::DIFFUSE, 0.0f, 0.0f, 1.0f };
+	triangleMaterials[7] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 0.0f };
 
 	// Ceiling
 	tri[8] = { -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE };
-	triangleMaterials[8] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 1.0f };
+	triangleMaterials[8] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 	tri[9] = { WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	triangleMaterials[9] = { MaterialType::DIFFUSE, 1.0f, 0.0f, 1.0f };
+	triangleMaterials[9] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 1.0f };
 }
 
 void initSpheres() {

@@ -23,7 +23,7 @@ __kernel void generate(
 
     rays[threadIdx] = ray;
 
-    accumulators[threadIdx] = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
+    accumulators[threadIdx] = (float4)(1.0f, 1.0f, 1.0f, 0.0f);
     // accumulators[3*threadIdx] = 1.0f;
     // accumulators[3*threadIdx+1] = 1.0f;
     // accumulators[3*threadIdx+2] = 1.0f;
