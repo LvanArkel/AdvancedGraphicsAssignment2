@@ -155,7 +155,7 @@ void initLights() {
 	//sphereMaterials[2].emittance = float3(5.0f);
 	const float L_S = 4.0f;
 	tri[10] = { -L_S, WALL_SIZE - 0.05f, L_S, L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[10] = { LIGHT, 1.0f, 1.0f, 1.0f};
+	triangleMaterials[10] = { LIGHT, 1.0f, 1.0f, 1.0f };
 	tri[11] = { L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S, L_S, WALL_SIZE - 0.05f, -L_S };
 	triangleMaterials[11] = { LIGHT, 1.0f, 1.0f, 1.0f };
 
@@ -185,14 +185,14 @@ const float3 camera(0, 0, -15);
 const float3 p0(-1, 1, -14), p1(1, 1, -14), p2(-1, -1, -14);
 const int rayBufferSize = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
 
-void InitBuffers(Surface *screen) {
+void InitBuffers(Surface* screen) {
 	Kernel::InitCL();
 
 	generateKernel = new Kernel("cl/generateKernel.cl", "generate");
 	extendKernel = new Kernel("cl/extendKernel.cl", "extend");
 	shadeKernel = new Kernel("cl/shadeKernel.cl", "shade");
 	finalizeKernel = new Kernel("cl/finalizeKernel.cl", "finalize");
-	
+
 	const int GPURayByteSize = 32;
 	const int GPUTriByteSize = 36;
 	const int GPUSphereByteSize = 16;
@@ -203,13 +203,13 @@ void InitBuffers(Surface *screen) {
 	clbuf_mat_tris = new Buffer(N * GPUMaterialByteSize, triangleMaterials, Buffer::READONLY);
 	clbuf_spheres = new Buffer(NS * GPUSphereByteSize, spheres, Buffer::READONLY);
 	clbuf_mat_spheres = new Buffer(NS * GPUMaterialByteSize, sphereMaterials, Buffer::READONLY);
-	
+
 	clbuf_rays = new Buffer(rayBufferSize * GPURayByteSize);
 	clbuf_hits = new Buffer(rayBufferSize * GPUHitByteSize);
 	clbuf_new_rays = new Buffer(rayBufferSize * GPURayByteSize);
 
 	clbuf_active_rays = new Buffer(sizeof(uint), &activeRays, Buffer::DEFAULT);
-	
+
 	clbuf_accumulator = new Buffer(rayBufferSize * 3 * sizeof(float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
@@ -253,7 +253,7 @@ void InitBuffers(Surface *screen) {
 	finalizeKernel->SetArguments(
 		clbuf_pixels,
 		clbuf_accumulator,
-		SCRWIDTH*SCRHEIGHT,
+		SCRWIDTH * SCRHEIGHT,
 		SAMPLES_PER_PIXEL
 	);
 
@@ -271,19 +271,21 @@ void Assignment2WavefrontApp::Init()
 	InitBuffers(screen);
 }
 
-void Assignment2WavefrontApp::Tick( float deltaTime )
+void Assignment2WavefrontApp::Tick(float deltaTime)
 {
 	// draw the scene
-	screen->Clear( 0 );
-	
+	screen->Clear(0);
+
 	Timer t;
-	
+
 	activeRays = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
 	//const int lowerRayBound = activeRays / 100;
-	const int maxDepth = 1;
+	const int maxDepth = 10;
 
 	generateKernel->Run(activeRays);
-
+	extendKernel->SetArgument(6, clbuf_rays);
+	shadeKernel->SetArgument(0, clbuf_rays);
+	shadeKernel->SetArgument(3, clbuf_new_rays);
 	int i;
 	for (i = 0; i < maxDepth; i++) {
 		//extendKernel->SetArguments(
@@ -311,6 +313,17 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 		shadeKernel->Run(activeThreads);
 		clbuf_active_rays->CopyFromDevice();
 		printf("Active rays: %d\n", activeRays);
+		if (i % 2 == 0) {
+			extendKernel->SetArgument(6, clbuf_new_rays);
+			shadeKernel->SetArgument(0, clbuf_new_rays);
+			shadeKernel->SetArgument(3, clbuf_rays);
+		}
+		else {
+			extendKernel->SetArgument(6, clbuf_rays);
+			shadeKernel->SetArgument(0, clbuf_rays);
+			shadeKernel->SetArgument(3, clbuf_new_rays);
+		}
+
 
 		//swap(clbuf_rays, clbuf_new_rays);
 	}
@@ -324,7 +337,7 @@ void Assignment2WavefrontApp::Tick( float deltaTime )
 
 
 	float elapsed = t.elapsed() * 1000;
-	printf( "tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr( 630 ) / elapsed );
+	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
 }
 
 // EOF
