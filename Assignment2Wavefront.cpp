@@ -157,7 +157,7 @@ void initLights() {
 	const float L_R = 4.0f;
 	const float L_I = 2.0f;
 	spheres[2] = { 0.0f, WALL_SIZE, 0.0f, L_R };
-	sphereMaterials[2] = { MaterialType::LIGHT, 2.0f, 2.0f, 2.0f };
+	sphereMaterials[2] = { MaterialType::LIGHT, L_I, L_I, L_I};
 	/*const float L_S = 4.0f;
 	tri[10] = { -L_S, WALL_SIZE - 0.05f, L_S, L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S };
 	triangleMaterials[10] = { LIGHT, 4.0f, 4.0f, 4.0f };
@@ -314,7 +314,7 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 
 		shadeKernel->Run(activeThreads);
 		clbuf_active_rays->CopyFromDevice();
-		printf("Active rays: %d\n", activeRays);
+		//printf("Active rays: %d\n", activeRays);
 		if (i % 2 == 0) {
 			extendKernel->SetArgument(6, clbuf_new_rays);
 			shadeKernel->SetArgument(0, clbuf_new_rays);

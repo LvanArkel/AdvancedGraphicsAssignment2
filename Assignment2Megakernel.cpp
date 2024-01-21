@@ -19,7 +19,7 @@ TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 
 #define N	12 // triangle count
 #define NS  3 //sphere count
-#define SAMPLES_PER_PIXEL 20
+#define SAMPLES_PER_PIXEL 50
 
 #ifdef ANALYZE_RESULTS
 ofstream timefile;

@@ -128,6 +128,15 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 
 	//float lastT = 1e30f;
 
+
+	for (int i = 0; i < N; i++) {
+		float lastT = ray->t;
+		IntersectTri(ray, &tri[i]);
+		if (lastT != ray->t) {
+			lastIntersect = i;
+		}
+	}
+	
 	for (int i = 0; i < NS; i++) {
 		float lastT = ray->t;
 		IntersectSphere(ray, &spheres[i]);
@@ -135,14 +144,6 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 		//if(ray->t < 1e30f){
 			lastIntersect = i;
 			hitSphere = true;
-		}
-	}
-
-	for (int i = 0; i < N; i++) {
-		float lastT = ray->t;
-		IntersectTri(ray, &tri[i]);
-		if (lastT != ray->t) {
-			lastIntersect = i;
 		}
 	}
 
