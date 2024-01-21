@@ -14,11 +14,11 @@
 TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 
 // triangle count
-//#define N	10
-//#define NS  3
-#define N 12
-#define NS 2
-#define SAMPLES_PER_PIXEL 20
+#define N	10
+#define NS  3
+//#define N 12
+//#define NS 2
+#define SAMPLES_PER_PIXEL 50
 //#define USE_NEE
 
 // forward declarations
@@ -154,16 +154,15 @@ void initSpheres() {
 
 void initLights() {
 	// Lamp
-	//const float L_R = 4.0f;
-	//spheres[2].origin = float3(0.0f, WALL_SIZE, 0.0f);
-	//spheres[2].radius = L_R;
-	//sphereMaterials[2].type = LIGHT;
-	//sphereMaterials[2].emittance = float3(5.0f);
-	const float L_S = 4.0f;
+	const float L_R = 4.0f;
+	const float L_I = 2.0f;
+	spheres[2] = { 0.0f, WALL_SIZE, 0.0f, L_R };
+	sphereMaterials[2] = { MaterialType::LIGHT, 2.0f, 2.0f, 2.0f };
+	/*const float L_S = 4.0f;
 	tri[10] = { -L_S, WALL_SIZE - 0.05f, L_S, L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S };
 	triangleMaterials[10] = { LIGHT, 4.0f, 4.0f, 4.0f };
 	tri[11] = { L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S, L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[11] = { LIGHT, 4.0f, 4.0f, 4.0f };
+	triangleMaterials[11] = { LIGHT, 4.0f, 4.0f, 4.0f };*/
 
 	// Add all lights to buffer
 	for (int i = 0; i < N; i++) {
@@ -213,7 +212,7 @@ void InitBuffers(Surface* screen) {
 
 	clbuf_active_rays = new Buffer(sizeof(uint), &activeRays, Buffer::DEFAULT);
 
-	clbuf_accumulator = new Buffer(rayBufferSize * 3 * sizeof(float));
+	clbuf_accumulator = new Buffer(rayBufferSize * 4 * sizeof(float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
 	clbuf_rand_seed = new Buffer(rayBufferSize * sizeof(uint), seeds, Buffer::DEFAULT);

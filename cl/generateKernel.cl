@@ -4,7 +4,7 @@ __kernel void generate(
     const int image_width, const int image_height,
     float3 camPos, float3 p0, float3 p1, float3 p2,
     __global struct Ray* rays,
-    __global float* accumulators
+    __global float4* accumulators
 ) {
     int threadIdx = get_global_id(0);
 
@@ -23,7 +23,8 @@ __kernel void generate(
 
     rays[threadIdx] = ray;
 
-    accumulators[3*threadIdx] = 1.0f;
-    accumulators[3*threadIdx+1] = 1.0f;
-    accumulators[3*threadIdx+2] = 1.0f;
+    accumulators[threadIdx] = (float4)(1.0f, 1.0f, 1.0f, 1.0f);
+    // accumulators[3*threadIdx] = 1.0f;
+    // accumulators[3*threadIdx+1] = 1.0f;
+    // accumulators[3*threadIdx+2] = 1.0f;
 }

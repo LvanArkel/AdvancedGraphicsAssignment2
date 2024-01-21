@@ -41,7 +41,7 @@ __kernel void shade(
     //Out
     __global struct Ray* newRays,
     __global volatile uint *newRayCounter,
-    __global float *accumulators
+    __global float4 *accumulators
 ) {
     int threadIdx = get_global_id(0);
 
@@ -59,9 +59,13 @@ __kernel void shade(
 
     if (hit.type != HIT_NOHIT) {
         if (hit.material.type == MAT_LIGHT) {
-            accumulators[3*ray.startThreadId] *= hit.material.albedoX;
-            accumulators[3*ray.startThreadId+1] *= hit.material.albedoY;
-            accumulators[3*ray.startThreadId+2] *= hit.material.albedoZ;
+            // accumulators[3*ray.startThreadId] *= hit.material.albedoX;
+            // accumulators[3*ray.startThreadId+1] *= hit.material.albedoY;
+            // accumulators[3*ray.startThreadId+2] *= hit.material.albedoZ;
+            accumulators[ray.startThreadId].x *= hit.material.albedoX;
+            accumulators[ray.startThreadId].y *= hit.material.albedoY;
+            accumulators[ray.startThreadId].z *= hit.material.albedoZ;
+            accumulators[ray.startThreadId].a = 1.0f;
             return;
         }
 
@@ -78,19 +82,21 @@ __kernel void shade(
         newRay.startThreadId = ray.startThreadId;
         float3 brdf = MaterialAlbedo(&hit.material) * M_1_PI_F;
         float3 irradiance = M_PI_F * 2.0f * brdf * dot(N, newRayD);
-        accumulators[3*ray.startThreadId] *= irradiance.x;
-        accumulators[3*ray.startThreadId+1] *= irradiance.y;
-        accumulators[3*ray.startThreadId+2] *= irradiance.z;
-        // accumulators[3*ray.startThreadId] = irradiance.x;
-        // accumulators[3*ray.startThreadId+1] = irradiance.y;
-        // accumulators[3*ray.startThreadId+2] = irradiance.z;
+        accumulators[ray.startThreadId].x *= irradiance.x;
+        accumulators[ray.startThreadId].y *= irradiance.y;
+        accumulators[ray.startThreadId].z *= irradiance.z;
+
+        // accumulators[3*ray.startThreadId] *= irradiance.x;
+        // accumulators[3*ray.startThreadId+1] *= irradiance.y;
+        // accumulators[3*ray.startThreadId+2] *= irradiance.z;
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;
     } else {
-            accumulators[3*ray.startThreadId] = 0.0f;
-            accumulators[3*ray.startThreadId+1] = 0.0f;
-            accumulators[3*ray.startThreadId+2] = 0.0f;
+        // accumulators[3*ray.startThreadId] = 0.0f;
+        // accumulators[3*ray.startThreadId+1] = 0.0f;
+        // accumulators[3*ray.startThreadId+2] = 0.0f;
+        accumulators[ray.startThreadId] = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
 
