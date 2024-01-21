@@ -128,6 +128,15 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 
 	//float lastT = 1e30f;
 
+
+	for (int i = 0; i < N; i++) {
+		float lastT = ray->t;
+		IntersectTri(ray, &tri[i]);
+		if (lastT != ray->t) {
+			lastIntersect = i;
+		}
+	}
+	
 	for (int i = 0; i < NS; i++) {
 		float lastT = ray->t;
 		IntersectSphere(ray, &spheres[i]);
@@ -135,14 +144,6 @@ __global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMate
 		//if(ray->t < 1e30f){
 			lastIntersect = i;
 			hitSphere = true;
-		}
-	}
-
-	for (int i = 0; i < N; i++) {
-		float lastT = ray->t;
-		IntersectTri(ray, &tri[i]);
-		if (lastT != ray->t) {
-			lastIntersect = i;
 		}
 	}
 
@@ -181,7 +182,7 @@ float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct 
 	float3 newSample = (float3)(1.0, 1.0, 1.0);
 	int depth = 0;
 	while (true) {
-		if (depth > 50) {
+		if (depth >= 20) {
 			return (float3)(0.0f);
 		}
 
@@ -231,7 +232,7 @@ float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct 
 		//return mat_albedo;
 
 		float3 partialIrradiance = 2.0f * M_PI_F * dot(normal, newDirection) * brdf;
-		//return newDirection;
+		//return partialIrradiance;
 
 		//float3 newSample = Sample(newRay, depth + 1);
 

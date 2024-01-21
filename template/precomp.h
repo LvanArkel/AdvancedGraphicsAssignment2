@@ -1294,7 +1294,7 @@ public:
 	template<T_ T> void S( uint i, T t ) { SetArgument( i, t ); }
 	void InitArgs() { acqBuffer = 0; /* nothing to acquire until told otherwise */ }
 #undef T_
-private:
+public:
 	void SetArgument( int idx, cl_mem* buffer );
 	void SetArgument( int idx, Buffer* buffer );
 	void SetArgument( int idx, Buffer& buffer );
