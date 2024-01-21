@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 //#define NS  3
 #define N 12
 #define NS 2
-#define SAMPLES_PER_PIXEL 1
+#define SAMPLES_PER_PIXEL 20
 //#define USE_NEE
 
 // forward declarations
@@ -46,6 +46,12 @@ struct Material {
 };
 
 // application data
+// define the corners of the screen in worldspace
+const float3 camera(0, 0, -15);
+const float3 p0(-1, 1, -14), p1(1, 1, -14), p2(-1, -1, -14);
+const int rayBufferSize = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
+
+
 Tri tri[N];
 Material triangleMaterials[N];
 
@@ -58,7 +64,7 @@ Material sphereMaterials[NS];
 int sphereLightSize;
 uint sphereLights[NS];
 
-uint seeds[SCRWIDTH * SCRHEIGHT];
+uint seeds[rayBufferSize];
 uint activeRays = 0;
 
 static Kernel* generateKernel;
@@ -94,7 +100,7 @@ uint WangHash(uint s)
 }
 
 void InitSeeds() {
-	for (int i = 0; i < SCRWIDTH * SCRHEIGHT; i++) {
+	for (int i = 0; i < rayBufferSize; i++) {
 		seeds[i] = WangHash((i + 1) * 17);
 	}
 }
@@ -155,9 +161,9 @@ void initLights() {
 	//sphereMaterials[2].emittance = float3(5.0f);
 	const float L_S = 4.0f;
 	tri[10] = { -L_S, WALL_SIZE - 0.05f, L_S, L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[10] = { LIGHT, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[10] = { LIGHT, 4.0f, 4.0f, 4.0f };
 	tri[11] = { L_S, WALL_SIZE - 0.05f, L_S, -L_S, WALL_SIZE - 0.05f, -L_S, L_S, WALL_SIZE - 0.05f, -L_S };
-	triangleMaterials[11] = { LIGHT, 1.0f, 1.0f, 1.0f };
+	triangleMaterials[11] = { LIGHT, 4.0f, 4.0f, 4.0f };
 
 	// Add all lights to buffer
 	for (int i = 0; i < N; i++) {
@@ -180,10 +186,7 @@ void InitScene() {
 	initLights();
 }
 
-// define the corners of the screen in worldspace
-const float3 camera(0, 0, -15);
-const float3 p0(-1, 1, -14), p1(1, 1, -14), p2(-1, -1, -14);
-const int rayBufferSize = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
+
 
 void InitBuffers(Surface* screen) {
 	Kernel::InitCL();
@@ -213,7 +216,7 @@ void InitBuffers(Surface* screen) {
 	clbuf_accumulator = new Buffer(rayBufferSize * 3 * sizeof(float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
-	clbuf_rand_seed = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), seeds, Buffer::DEFAULT);
+	clbuf_rand_seed = new Buffer(rayBufferSize * sizeof(uint), seeds, Buffer::DEFAULT);
 
 	generateKernel->SetArguments(
 		SCRWIDTH, SCRHEIGHT,
