@@ -15,10 +15,10 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 
 // triangle count
 #define N	10
-#define NS  3
-//#define N 12
-//#define NS 2
-#define SAMPLES_PER_PIXEL 50
+#define SPHERE_AMT 20
+#define NS (SPHERE_AMT*SPHERE_AMT+1)
+
+#define SAMPLES_PER_PIXEL 20
 //#define USE_NEE
 
 // forward declarations
@@ -47,8 +47,9 @@ struct Material {
 
 // application data
 // define the corners of the screen in worldspace
-const float3 camera(0, 0, -15);
-const float3 p0(-1, 1, -14), p1(1, 1, -14), p2(-1, -1, -14);
+const float WALL_SIZE = 10.0;
+const float3 camera(0, 0, -(2 * WALL_SIZE));
+const float3 p0(-WALL_SIZE, WALL_SIZE, -WALL_SIZE), p1(WALL_SIZE, WALL_SIZE, -WALL_SIZE), p2(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 const int rayBufferSize = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
 
 
@@ -88,7 +89,6 @@ static Buffer* clbuf_rand_seed = 0;
 
 static Buffer* clbuf_active_rays;
 
-const float WALL_SIZE = 10.0;
 
 uint WangHash(uint s)
 {
@@ -140,15 +140,22 @@ void initWalls() {
 }
 
 void initSpheres() {
-	// Left ball
-	const float S1_R = 2.0f;
-	spheres[0] = { -S1_R * 1.5f, -WALL_SIZE + S1_R, WALL_SIZE * 0.5f , S1_R };
-	sphereMaterials[0] = { MaterialType::DIFFUSE, 1.0f, 1.0f, 0.0f };
+	const float S_R = 0.3f;
+	const float offset = 1.0f;
+	for (int z = 0, i = 0; z < SPHERE_AMT; z++) {
+		for (int x = 0; x < SPHERE_AMT; x++, i++) {
+			spheres[i].ox = (float)(3 * S_R * (x - SPHERE_AMT / 2));
+			spheres[i].oy = -WALL_SIZE + S_R;
+			spheres[i].oz = (float)(3 * S_R * (z - SPHERE_AMT / 2));
+			spheres[i].radius = S_R;
+			sphereMaterials[i].type = MaterialType::DIFFUSE;
+			sphereMaterials[i].albedoX = RandomFloat() * 0.5 + 0.5;
+			sphereMaterials[i].albedoY = RandomFloat() * 0.5 + 0.5;
+			sphereMaterials[i].albedoZ = RandomFloat() * 0.5 + 0.5;
 
-	// Right ball
-	const float S2_R = 2.0f;
-	spheres[1] = { S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f, S2_R };
-	sphereMaterials[1] = { MaterialType::DIFFUSE, 0.0f, 1.0f, 1.0f };
+
+		}
+	}
 
 }
 
@@ -314,6 +321,10 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 
 		shadeKernel->Run(activeThreads);
 		clbuf_active_rays->CopyFromDevice();
+
+		//if (clbuf_active_rays == 0) {
+		//	break;
+		//}
 		//printf("Active rays: %d\n", activeRays);
 		if (i % 2 == 0) {
 			extendKernel->SetArgument(6, clbuf_new_rays);
@@ -326,12 +337,14 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 			shadeKernel->SetArgument(3, clbuf_new_rays);
 		}
 
+		//cout << activeRays << endl;
 
 		//swap(clbuf_rays, clbuf_new_rays);
 	}
 	//if (i % 2 == 1) {
 	//	swap(clbuf_rays, clbuf_new_rays);
 	//}
+	//cout << activeRays << endl;
 
 
 	finalizeKernel->Run(SCRWIDTH * SCRHEIGHT);

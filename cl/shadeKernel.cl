@@ -86,9 +86,9 @@ __kernel void shade(
         accumulators[ray.startThreadId].y *= irradiance.y;
         accumulators[ray.startThreadId].z *= irradiance.z;
 
-        // accumulators[3*ray.startThreadId] *= irradiance.x;
-        // accumulators[3*ray.startThreadId+1] *= irradiance.y;
-        // accumulators[3*ray.startThreadId+2] *= irradiance.z;
+        // accumulators[3*ray.startThreadId] = brdf.x;
+        // accumulators[3*ray.startThreadId+1] = brdf.y;
+        // accumulators[3*ray.startThreadId+2] = brdf.z;
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;

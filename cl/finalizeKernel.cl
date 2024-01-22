@@ -20,8 +20,9 @@ __kernel void finalize(
         // g += accumulators[3*(threadIdx + image_size*i)+1];
         // b += accumulators[3*(threadIdx + image_size*i)+2];
     }
-    float invSamples = 1 / (float)samples;
-    rgb *= invSamples;
+    // float invSamples = 1 / (float)samples;
+    // rgb *= invSamples;
+    rgb/=(float)samples;
     // r *= invSamples;
     // g *= invSamples;
     // b *= invSamples;
