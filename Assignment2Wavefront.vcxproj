@@ -136,11 +136,13 @@
     <ClInclude Include="template\precomp.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cl\connectkernel.cl" />
     <None Include="cl\extendKernel.cl" />
     <None Include="cl\finalizeKernel.cl" />
     <None Include="cl\generateKernel.cl" />
     <None Include="cl\kernels.cl" />
     <None Include="cl\shadeKernel.cl" />
+    <None Include="cl\wavefrontTools.cl" />
     <None Include="README.md" />
     <None Include="template\LICENSE" />
   </ItemGroup>

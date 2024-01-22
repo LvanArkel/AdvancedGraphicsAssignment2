@@ -20,6 +20,48 @@ uint WangHash( uint s )
 	return s; 
 }
 
+struct LightCheck {
+    int sphereIndex;
+    float3 L;
+    float3 Nl;
+    float dist;
+    float A;
+};
+
+float3 UniformSampleSphere(uint* seed) {
+    float3 result;
+	do {
+		result = (float3)(RandomFloat(seed)*2.0f - 1.0f, RandomFloat(seed) * 2.0f - 1.0f, RandomFloat(seed) * 2.0f - 1.0f);
+	} while (length(result) > 1);
+    return normalize(result);
+}
+
+struct LightCheck SampleRandomLight(
+    uint* seed,
+    int lightSize,
+    int* lightIndices,
+    struct Sphere* spheres,
+    float3 I
+) {
+    int selectedLight;
+    do {
+        selectedLight = (int) (RandomFloat(seed) * lightSize);
+    } while (selectedLight == lightSize);
+    struct LightCheck lightCheck;
+    struct Sphere selectedSphere = spheres[lightIndices[selectedLight]];
+    float3 origin = SphereOrigin(&selectedSphere);
+    float3 Nl = UniformSampleSphere(seed);
+    float3 P = selectedSphere.radius * Nl + origin;
+    float3 intersectDirection = P - I;
+    lightCheck.sphereIndex = lightIndices[selectedLight];
+    lightCheck.L = normalize(intersectDirection);
+    lightCheck.Nl = Nl;
+    lightCheck.dist = length(intersectDirection);
+    lightCheck.A = 4*M_PI_F * selectedSphere.radius * selectedSphere.radius;
+
+    return lightCheck;
+}
+
 // Returns a normalized vector of which the angle is on the same hemisphere as the normal.
 float3 UniformSampleHemisphere(float3 normal, uint* seed) {
 	float3 result;
@@ -38,10 +80,16 @@ __kernel void shade(
     __global struct Ray *rays, 
     __global struct Hit *hits,
     __global uint *seeds,
+    __global struct Sphere* spheres,
+    __global struct Material* sphereMaterials,
+    __global int* lightSpheres,
+    const int lightSphereSize,
     //Out
     __global struct Ray* newRays,
     __global volatile uint *newRayCounter,
-    __global float4 *accumulators
+    __global struct ShadowRay* shadowRays,
+    __global volatile uint *shadowRayCounter,
+    __global float* Ts
 ) {
     int threadIdx = get_global_id(0);
 
@@ -51,52 +99,44 @@ __kernel void shade(
     struct Ray ray = rays[threadIdx];
     struct Hit hit = hits[threadIdx];
 
-    // accumulators[3*ray.startThreadId] = 0.0f;
-    // accumulators[3*ray.startThreadId+1] = 0.0f;
-    // accumulators[3*ray.startThreadId+2] = 1.0f;
-
-    // return;
-
     if (hit.type != HIT_NOHIT) {
         if (hit.material.type == MAT_LIGHT) {
-            // accumulators[3*ray.startThreadId] *= hit.material.albedoX;
-            // accumulators[3*ray.startThreadId+1] *= hit.material.albedoY;
-            // accumulators[3*ray.startThreadId+2] *= hit.material.albedoZ;
-            accumulators[ray.startThreadId].x *= hit.material.albedoX;
-            accumulators[ray.startThreadId].y *= hit.material.albedoY;
-            accumulators[ray.startThreadId].z *= hit.material.albedoZ;
-            accumulators[ray.startThreadId].a = 1.0f;
             return;
         }
 
-        //TODO: Add randomness
-        float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
-        float3 N = normalize(hit_normal);
-        uint seed =  seeds[threadIdx];
-        seeds[threadIdx] = seed;
+        float3 I = RayO(&ray) + ray.t * RayD(&ray);
+        float3 N = normalize(HitNormal(&hit));
+        float3 brdf = MaterialAlbedo(&hit.material) * M_1_PI_F;
+        // Sample random light
+        struct LightCheck lightCheck = SampleRandomLight(&seed, lightSphereSize, lightSpheres, spheres, I);
+        float solidAngle = (dot(lightCheck.Nl, -lightCheck.L) * lightCheck.A) / (lightCheck.dist * lightCheck.dist);
+        float lightPdf = 1.0f / solidAngle;
+        float3 T = (float)(Ts[3*ray.startThreadId], Ts[3*ray.startThreadId+1], Ts[3*ray.startThreadId+2]);
+        float3 deltaE = T * (dot (N, lightCheck.L) / lightPdf) * brdf * MaterialAlbedo(&sphereMaterials[lightCheck.sphereIndex]);
+        struct ShadowRay shadowRay;
+        SetRayO(&shadowRay.ray, I);
+        SetRayD(&shadowRay.ray, lightCheck.L);
+        shadowRay.ray.t = lightCheck.dist;
+        shadowRay.ray.startThreadId = ray.startThreadId;
+        if (dot(N, lightCheck.L) > 0 && dot( lightCheck.Nl, -lightCheck.L) > 0) {
+            SetShadowRayDE(&shadowRay, deltaE);
+        } else {
+            SetShadowRayDE(&shadowRay, (float3)(0.0f, 0.0f, 0.0f));
+        }
+        shadowRays[atomic_inc(shadowRayCounter)] = shadowRay;
+
+        // Continue random walk
         float3 newRayD = UniformSampleHemisphere(N, &seed);
         struct Ray newRay;
         SetRayD(&newRay, newRayD);
-        SetRayO(&newRay, RayO(&ray) + ray.t * RayD(&ray));
+        SetRayO(&newRay, I);
         newRay.t = 1e30f;
         newRay.startThreadId = ray.startThreadId;
-        float3 brdf = MaterialAlbedo(&hit.material) * M_1_PI_F;
         float3 irradiance = M_PI_F * 2.0f * brdf * dot(N, newRayD);
-        accumulators[ray.startThreadId].x *= irradiance.x;
-        accumulators[ray.startThreadId].y *= irradiance.y;
-        accumulators[ray.startThreadId].z *= irradiance.z;
-
-        // accumulators[3*ray.startThreadId] *= irradiance.x;
-        // accumulators[3*ray.startThreadId+1] *= irradiance.y;
-        // accumulators[3*ray.startThreadId+2] *= irradiance.z;
-
-        // Send extension ray
+        for (int i = 0; i < 3; i++) {
+            Ts[3*ray.startThreadId+i] = irradiance[i];
+        }
         newRays[atomic_inc(newRayCounter)] = newRay;
-    } else {
-        // accumulators[3*ray.startThreadId] = 0.0f;
-        // accumulators[3*ray.startThreadId+1] = 0.0f;
-        // accumulators[3*ray.startThreadId+2] = 0.0f;
-        accumulators[ray.startThreadId] = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
 

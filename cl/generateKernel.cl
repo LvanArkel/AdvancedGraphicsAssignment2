@@ -1,10 +1,13 @@
 #include "cl/wavefrontTools.cl"
 
 __kernel void generate(
+    // In
     const int image_width, const int image_height,
     float3 camPos, float3 p0, float3 p1, float3 p2,
+    // Out
     __global struct Ray* rays,
-    __global float4* accumulators
+    __global float* Ts,
+    __global float* Es
 ) {
     int threadIdx = get_global_id(0);
 
@@ -23,8 +26,8 @@ __kernel void generate(
 
     rays[threadIdx] = ray;
 
-    accumulators[threadIdx] = (float4)(1.0f, 1.0f, 1.0f, 0.0f);
-    // accumulators[3*threadIdx] = 1.0f;
-    // accumulators[3*threadIdx+1] = 1.0f;
-    // accumulators[3*threadIdx+2] = 1.0f;
+    for (int i = 0; i < 3; i++) {
+        Ts[3*threadIdx+i] = 1.0f;
+        Es[3*threadIdx+i] = 0.0f;
+    }
 }

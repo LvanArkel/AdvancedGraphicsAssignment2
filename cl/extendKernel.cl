@@ -1,43 +1,5 @@
 #include "cl/wavefrontTools.cl"
 
-void IntersectSphere(struct Ray* ray, struct Sphere* sphere) {
-    float3 sphere_origin = SphereOrigin(sphere);
-    float3 rayO = RayO(ray);
-    float3 rayD = RayD(ray);
-	float3 oc = rayO - sphere_origin;
-	float b = dot(oc, rayD);
-	float c = dot(oc, oc) - sphere->radius * sphere->radius;
-	float h = b * b - c;
-	if (h > 0.0f) {
-		h = sqrt(h);
-		ray->t = min(ray->t, -b - h);
-	}
-}
-
-void IntersectTri(struct Ray* ray, struct Tri* tri )
-{
-    float3 vertex0 = TriVertex0(tri);
-    float3 vertex1 = TriVertex1(tri);
-    float3 vertex2 = TriVertex2(tri);
-    float3 rayO = RayO(ray);
-    float3 rayD = RayD(ray);
-	float3 edge1 = vertex1 - vertex0;
-	float3 edge2 = vertex2 - vertex0;
-	float3 h = cross( rayD, edge2 );
-	float a = dot( edge1, h );
-	if (a > -0.0001f && a < 0.0001f) return; // ray parallel to triangle
-	float f = 1 / a;
-	float3 s = rayO - vertex0;
-	float u = f * dot( s, h );
-	if (u < 0 || u > 1) return;
-	float3 q = cross( s, edge1 );
-	float v = f * dot( rayD, q );
-	if (v < 0 || u + v > 1) return;
-    //ray->t = 0.0;
-	float t = f * dot( edge2, q );
-	if (t > 0.0001f) ray->t = min( ray->t, t );
-}
-
 struct Hit Trace(
     struct Ray* ray,
     __global struct Tri* tri, const int NTris,

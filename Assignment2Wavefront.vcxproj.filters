@@ -40,6 +40,12 @@
     <None Include="cl\finalizeKernel.cl">
       <Filter>template\cl</Filter>
     </None>
+    <None Include="cl\connectkernel.cl">
+      <Filter>template\cl</Filter>
+    </None>
+    <None Include="cl\wavefrontTools.cl">
+      <Filter>template\cl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template">
