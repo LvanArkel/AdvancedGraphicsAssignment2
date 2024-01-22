@@ -17,9 +17,10 @@ TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 //#define CPU
 //#define ANALYZE_RESULTS
 
-#define N	12 // triangle count
-#define NS  3 //sphere count
-#define SAMPLES_PER_PIXEL 50
+#define N	10 // triangle count
+#define SPHERE_AMT 20
+#define NS (SPHERE_AMT*SPHERE_AMT+1)
+#define SAMPLES_PER_PIXEL 20
 
 #ifdef ANALYZE_RESULTS
 ofstream timefile;
@@ -28,18 +29,25 @@ uint frameidx = 0;
 #endif
 
 static Kernel* kernel = 0; //megakernel
-static Buffer* clbuf_r = 0; // buffer for color r channel
-static Buffer* clbuf_g = 0; // buffer for color g channel
-static Buffer* clbuf_b = 0; // buffer for color b channel
+//static Buffer* clbuf_r = 0; // buffer for color r channel
+//static Buffer* clbuf_g = 0; // buffer for color g channel
+//static Buffer* clbuf_b = 0; // buffer for color b channel
 static Buffer* clbuf_spheres = 0; // buffer for spheres
 static Buffer* clbuf_tris = 0; // buffer for triangles
 static Buffer* clbuf_mat_sphere = 0; // buffer for sphere materials
 static Buffer* clbuf_mat_tri = 0; // buffer for sphere materials
+static Buffer* clbuf_test_cl = 0; // buffer for sphere materials
 
 //SOA
-int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
-int cl_g[SCRWIDTH * SCRHEIGHT]; //color g channel sent to kernel
-int cl_b[SCRWIDTH * SCRHEIGHT]; //color b channel sent to kernel
+//int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
+//int cl_g[SCRWIDTH * SCRHEIGHT]; //color g channel sent to kernel
+//int cl_b[SCRWIDTH * SCRHEIGHT]; //color b channel sent to kernel
+
+int cl_rgb[SCRWIDTH * SCRHEIGHT];
+
+const float WALL_SIZE = 10.0;
+const float3 camera(0, 0, -(2 * WALL_SIZE));
+const float3 p0(-WALL_SIZE, WALL_SIZE, -WALL_SIZE), p1(WALL_SIZE, WALL_SIZE, -WALL_SIZE), p2(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
 
 // forward declarations
 
@@ -432,46 +440,72 @@ void InitCPU() {
 #endif
 #ifdef GPGPU
 void InitSpheres() {
-	const float WALL_SIZE = 10.0f;
-
-	// Left ball
-	const float S1_R = 2.0f;
-	spheres[0].ox = -S1_R * 1.5f;
-	spheres[0].oy = -WALL_SIZE + S1_R * 0.5f;
-	spheres[0].oz = WALL_SIZE * 0.5f;
-	//spheres[0].ox = 0.0f;
-	//spheres[0].oy = 0.0f;
-	//spheres[0].oz = -1.0f;
-	spheres[0].radius = S1_R;
-	sphereMaterials[0].type = DIFFUSE;
-	//sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
-	sphereMaterials[0].albx = 1.0f, sphereMaterials[0].alby = 1.0f, sphereMaterials[0].albz = 0.0f;
-
-
-	// Right ball
-	const float S2_R = 2.0f;
-	spheres[1].ox = S2_R * 1.5f;
-	spheres[1].oy = -WALL_SIZE + S2_R * 0.5f;
-	spheres[1].oz = WALL_SIZE * 0.5f;
-	spheres[1].radius = S2_R;
-	sphereMaterials[1].type = DIFFUSE;
-	sphereMaterials[1].albx = 0.0f, sphereMaterials[1].alby = 1.0f, sphereMaterials[1].albz = 1.0f;
-
-	// Lamp
+	const float S_R = 0.3f;
+	const float offset = 1.0f;
+	int i = 0;
+	for (int z = 0; z < SPHERE_AMT; z++) {
+		for (int x = 0; x < SPHERE_AMT; x++, i++) {
+			spheres[i].ox = (float)(3 * S_R * (x - SPHERE_AMT / 2));
+			spheres[i].oy = -WALL_SIZE + S_R;
+			spheres[i].oz = (float)(3 * S_R * (z - SPHERE_AMT / 2));
+			spheres[i].radius = S_R;
+			sphereMaterials[i].type = DIFFUSE;
+			sphereMaterials[i].albx = RandomFloat() * 0.5 + 0.5;
+			sphereMaterials[i].alby = RandomFloat() * 0.5 + 0.5;
+			sphereMaterials[i].albz = RandomFloat() * 0.5 + 0.5;
+			cout << i << endl;
+		}
+	}
 	const float L_R = 4.0f;
-	spheres[2].ox = 0.0f;
-	spheres[2].oy = WALL_SIZE;
-	spheres[2].oz = 0.0f;
-	spheres[2].radius = L_R;
-	sphereMaterials[2].type = LIGHT;
-	//sphereMaterials[2].emittance = float3(2.0f);
-	sphereMaterials[2].emitx = 2.0f, sphereMaterials[2].emity = 2.0f, sphereMaterials[2].emitz = 2.0f;
-	sphereMaterials[2].albx = 2.0f, sphereMaterials[2].alby = 2.0f, sphereMaterials[2].albz = 2.0f;
+	spheres[i].ox = 0.0f;;
+	spheres[i].oy = WALL_SIZE;
+	spheres[i].oz = 0.0f;
+	spheres[i].radius = L_R;
+	sphereMaterials[i].type = LIGHT;
+	float intensity = 2.0f;
+	sphereMaterials[i].emitx = intensity, sphereMaterials[i].emity = intensity, sphereMaterials[i].emitz = intensity;
+	sphereMaterials[i].albx = intensity, sphereMaterials[i].alby = intensity, sphereMaterials[i].albz = intensity;
+
+	cout << i << endl;
+
+	//// Left ball
+	//const float S1_R = 2.0f;
+	//spheres[0] = { -S1_R * 1.5f, -WALL_SIZE + S1_R, WALL_SIZE * 0.5f , S1_R };
+
+	////spheres[0].ox = -S1_R * 1.5f;
+	////spheres[0].oy = -WALL_SIZE + S1_R * 0.5f;
+	////spheres[0].oz = WALL_SIZE * 0.5f;
+	////spheres[0].radius = S1_R;
+	//sphereMaterials[0].type = DIFFUSE;
+	////sphereMaterials[0].albedo = float3(1.0f, 1.0f, 0.0f);
+	//sphereMaterials[0].albx = 1.0f, sphereMaterials[0].alby = 1.0f, sphereMaterials[0].albz = 0.0f;
+
+
+	//// Right ball
+	//const float S2_R = 2.0f;
+	//spheres[1] = { S2_R * 1.5f, -WALL_SIZE + S2_R, WALL_SIZE * 0.5f, S2_R };
+	////spheres[1].ox = S2_R * 1.5f;
+	////spheres[1].oy = -WALL_SIZE + S2_R * 0.5f;
+	////spheres[1].oz = WALL_SIZE * 0.5f;
+	////spheres[1].radius = S2_R;
+	//sphereMaterials[1].type = DIFFUSE;
+	//sphereMaterials[1].albx = 0.0f, sphereMaterials[1].alby = 1.0f, sphereMaterials[1].albz = 1.0f;
+
+	//// Lamp
+	//const float L_R = 4.0f;
+	//spheres[2].ox = 0.0f;
+	//spheres[2].oy = WALL_SIZE;
+	//spheres[2].oz = 0.0f;
+	//spheres[2].radius = L_R;
+	//sphereMaterials[2].type = LIGHT;
+	////sphereMaterials[2].emittance = float3(2.0f);
+	//float intensity = 2.0f;
+	//sphereMaterials[2].emitx = intensity, sphereMaterials[2].emity = intensity, sphereMaterials[2].emitz = intensity;
+	//sphereMaterials[2].albx = intensity, sphereMaterials[2].alby = intensity, sphereMaterials[2].albz = intensity;
 
 }
 
 void InitTris() {
-	const float WALL_SIZE = 10.0;
 	// Triangles are clockwise
 	//Back wall
 	tri[0] = { -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, WALL_SIZE };
@@ -544,23 +578,23 @@ void InitTris() {
 	diffuseMaterials[9].type = DIFFUSE;
 	diffuseMaterials[9].albx = 1.0f, diffuseMaterials[9].alby = 0.0f, diffuseMaterials[9].albz = 1.0f;
 
-	//// Back wall
-	//tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	//tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	//tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	tri[10] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	diffuseMaterials[10].type = DIFFUSE;
-	diffuseMaterials[10].albx = 0.6f, diffuseMaterials[10].alby = 0.6f, diffuseMaterials[10].albz = 0.6f;
+	////// Back wall
+	////tri[10].vertex0 = float3(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	////tri[10].vertex1 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	////tri[10].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	//tri[10] = { -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	//diffuseMaterials[10].type = DIFFUSE;
+	//diffuseMaterials[10].albx = 0.6f, diffuseMaterials[10].alby = 0.6f, diffuseMaterials[10].albz = 0.6f;
 
-	//tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-	//tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	//tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
-	tri[11] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
-	diffuseMaterials[11].type = DIFFUSE;
-	diffuseMaterials[11].albx = 0.6f, diffuseMaterials[11].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
+	////tri[11].vertex0 = float3(WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
+	////tri[11].vertex2 = float3(-WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	////tri[11].vertex1 = float3(WALL_SIZE, WALL_SIZE, -WALL_SIZE);
+	//tri[11] = { WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, WALL_SIZE, -WALL_SIZE, -WALL_SIZE, WALL_SIZE, -WALL_SIZE };
+	//diffuseMaterials[11].type = DIFFUSE;
+	//diffuseMaterials[11].albx = 0.6f, diffuseMaterials[11].alby = 0.6f, diffuseMaterials[1].albz = 0.6f;
 }
 
-void InitOpenCL() {
+void InitOpenCL(Surface* screen) {
 #ifdef ANALYZE_RESULTS
 	timefile.open(filename.c_str());
 	timefile << "frameidx," << "time," << "rays" << "\n";
@@ -570,26 +604,26 @@ void InitOpenCL() {
 	InitSpheres();
 	InitTris();
 
-	float3 camera(0, 0, -9);
-	float3 p0(-1, 1, -8), p1(1, 1, -8), p2(-1, -1, -8);
+
 	if (!kernel)
 	{
 		Kernel::InitCL();
 
 		kernel = new Kernel("cl/megakernel.cl", "render");
-		clbuf_r = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_r, Buffer::DEFAULT);
-		clbuf_g = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_g, Buffer::DEFAULT);
-		clbuf_b = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_b, Buffer::DEFAULT);
+		//clbuf_r = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_r, Buffer::DEFAULT);
+		//clbuf_g = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_g, Buffer::DEFAULT);
+		//clbuf_b = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), cl_b, Buffer::DEFAULT);
+		clbuf_test_cl = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(int), screen->pixels, Buffer::DEFAULT);
 
 		clbuf_spheres = new Buffer(NS * sizeof(Sphere), spheres, Buffer::DEFAULT);
 		clbuf_tris = new Buffer(N * sizeof(Tri), tri, Buffer::DEFAULT);
 		clbuf_mat_sphere = new Buffer(NS * sizeof(DiffuseMat), sphereMaterials, Buffer::DEFAULT);
 		clbuf_mat_tri = new Buffer(N * sizeof(DiffuseMat), diffuseMaterials, Buffer::DEFAULT);
 	}
-	kernel->SetArguments(clbuf_r, clbuf_g, clbuf_b, clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2);
-	clbuf_r->CopyToDevice();
-	clbuf_g->CopyToDevice();
-	clbuf_b->CopyToDevice();
+	kernel->SetArguments(clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2, clbuf_test_cl);
+	//clbuf_r->CopyToDevice();
+	//clbuf_g->CopyToDevice();
+	//clbuf_b->CopyToDevice();
 	clbuf_spheres->CopyToDevice();
 	clbuf_tris->CopyToDevice();
 	clbuf_mat_sphere->CopyToDevice();
@@ -602,7 +636,7 @@ void InitOpenCL() {
 void Assignment2MegakernelApp::Init()
 {
 #ifdef GPGPU
-	InitOpenCL();
+	InitOpenCL(screen);
 #endif
 #ifdef CPU
 	InitCPU();
@@ -620,17 +654,18 @@ void Assignment2MegakernelApp::TickOpenCL() {
 	Timer t;
 
 	kernel->Run(SCRWIDTH * SCRHEIGHT);
-	clbuf_r->CopyFromDevice();
-	clbuf_g->CopyFromDevice();
-	clbuf_b->CopyFromDevice();
+	//clbuf_r->CopyFromDevice();
+	//clbuf_g->CopyFromDevice();
+	//clbuf_b->CopyFromDevice();
+	clbuf_test_cl->CopyFromDevice();
 
 
-	//cout << cl_r[0] << endl;
-	for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++) {
-		uint idx = y * SCRWIDTH + x;
-		//if (cl_r[idx] > 0) cout << "aa" << endl;
-		screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
-	}
+	////cout << cl_r[0] << endl;
+	//for (int y = 0; y < SCRHEIGHT; y++) for (int x = 0; x < SCRWIDTH; x++) {
+	//	uint idx = y * SCRWIDTH + x;
+	//	//if (cl_r[idx] > 0) cout << "aa" << endl;
+	//	//screen->Plot(x, y, cl_r[idx] << 16 | cl_g[idx] << 8 | cl_b[idx]);
+	//}
 	//cout << "rendered 1 frame" << endl;
 	float elapsed = t.elapsed() * 1000;
 	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
