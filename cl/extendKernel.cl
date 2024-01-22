@@ -73,7 +73,7 @@ struct Hit Trace(
 			hit.material = sphereMaterials[lastIntersect];
             float3 rayO = RayO(ray);
             float3 rayD = RayD(ray);
-			float3 normal = SphereOrigin(&sphere) - (rayO + ray->t * rayD);
+			float3 normal = (rayO + ray->t * rayD) - SphereOrigin(&sphere);
             SetHitNormal(&hit, normal);
 		}
 		else {
