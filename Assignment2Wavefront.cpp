@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 #define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 
-#define SAMPLES_PER_PIXEL 20
+#define SAMPLES_PER_PIXEL 50
 //#define USE_NEE
 
 // forward declarations

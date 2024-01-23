@@ -9,17 +9,18 @@ __kernel void finalize(
 ) {
     int threadIdx = get_global_id(0);
 
-    clr[threadIdx].x += accumulators[threadIdx].x;
-    clr[threadIdx].y += accumulators[threadIdx].y;
-    clr[threadIdx].z += accumulators[threadIdx].z;
+    if (accumulators[threadIdx].a) {
+        clr[threadIdx].x += accumulators[threadIdx].x;
+        clr[threadIdx].y += accumulators[threadIdx].y;
+        clr[threadIdx].z += accumulators[threadIdx].z;
+    }
 
     float r = 0.0f;
     float g = 0.0f;
     float b = 0.0f;
     float3 rgb = (float3)(0.0f, 0.0f, 0.0f);
-    if (accumulators[threadIdx].a == 1.0f) {
-        rgb = (float3)(clr[threadIdx].x, clr[threadIdx].y, clr[threadIdx].z);
-    }
+    rgb = (float3)(clr[threadIdx].x, clr[threadIdx].y, clr[threadIdx].z);
+    
     //for (int i = 0; i < samples; i++) {
         //if (accumulators[threadIdx].a == 1.0f) {
     //rgb = clr[threadIdx];
@@ -51,4 +52,5 @@ __kernel void finalize(
     clr[threadIdx].x = 0.0f;
     clr[threadIdx].y = 0.0f;
     clr[threadIdx].z = 0.0f;
+    clr[threadIdx].a = 0.0f;
 }

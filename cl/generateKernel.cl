@@ -24,12 +24,15 @@ __kernel void generate(
 
     rays[threadIdx] = ray;
 
-    clr[threadIdx].x += accumulators[threadIdx].x;
-    clr[threadIdx].y += accumulators[threadIdx].y;
-    clr[threadIdx].z += accumulators[threadIdx].z;
+    if (accumulators[threadIdx].a) {
+        clr[threadIdx].x += accumulators[threadIdx].x;
+        clr[threadIdx].y += accumulators[threadIdx].y;
+        clr[threadIdx].z += accumulators[threadIdx].z;
+    }
     accumulators[threadIdx].x = 1.0f;// = (float4)(1.0f, 1.0f, 1.0f, 0.0f);
     accumulators[threadIdx].y = 1.0f;
     accumulators[threadIdx].z = 1.0f;//
+    accumulators[threadIdx].a = 0.0f;
 
     // accumulators[3*threadIdx] = 1.0f;
     // accumulators[3*threadIdx+1] = 1.0f;

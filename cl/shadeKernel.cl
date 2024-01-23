@@ -93,9 +93,9 @@ __kernel void shade(
         //TODO: Add randomness
         float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
         float3 N = normalize(hit_normal);
-        uint seed =  seeds[threadIdx];
+        uint* seed =  &seeds[threadIdx];
 
-        float3 newRayD = UniformSampleHemisphere(N, &seed);
+        float3 newRayD = UniformSampleHemisphere(N, seed);
         struct Ray newRay;
         SetRayD(&newRay, newRayD);
         SetRayO(&newRay, RayO(&ray) + ray.t * RayD(&ray));
@@ -113,7 +113,6 @@ __kernel void shade(
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;
-        seeds[threadIdx] = seed;
     } else {
         // accumulators[3*ray.startThreadId] = 0.0f;
         // accumulators[3*ray.startThreadId+1] = 0.0f;
