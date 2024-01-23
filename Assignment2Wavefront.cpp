@@ -15,7 +15,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 
 // triangle count
 #define N	10
-#define SPHERE_AMT 20
+#define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 
 #define SAMPLES_PER_PIXEL 20
@@ -50,7 +50,7 @@ struct Material {
 const float WALL_SIZE = 10.0;
 const float3 camera(0, 0, -(2 * WALL_SIZE));
 const float3 p0(-WALL_SIZE, WALL_SIZE, -WALL_SIZE), p1(WALL_SIZE, WALL_SIZE, -WALL_SIZE), p2(-WALL_SIZE, -WALL_SIZE, -WALL_SIZE);
-const int rayBufferSize = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
+const int rayBufferSize = SCRWIDTH * SCRHEIGHT;
 
 
 Tri tri[N];
@@ -83,6 +83,7 @@ static Buffer* clbuf_hits;
 static Buffer* clbuf_new_rays;
 
 static Buffer* clbuf_accumulator;
+static Buffer* clbuf_clr;
 static Buffer* clbuf_pixels;
 
 static Buffer* clbuf_rand_seed = 0;
@@ -140,7 +141,7 @@ void initWalls() {
 }
 
 void initSpheres() {
-	const float S_R = 0.3f;
+	const float S_R = 1.0f;
 	const float offset = 1.0f;
 	for (int z = 0, i = 0; z < SPHERE_AMT; z++) {
 		for (int x = 0; x < SPHERE_AMT; x++, i++) {
@@ -220,6 +221,7 @@ void InitBuffers(Surface* screen) {
 	clbuf_active_rays = new Buffer(sizeof(uint), &activeRays, Buffer::DEFAULT);
 
 	clbuf_accumulator = new Buffer(rayBufferSize * 4 * sizeof(float));
+	clbuf_clr = new Buffer(SCRWIDTH * SCRHEIGHT * 4 * sizeof(cl_float));
 	clbuf_pixels = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), screen->pixels, Buffer::DEFAULT);
 
 	clbuf_rand_seed = new Buffer(rayBufferSize * sizeof(uint), seeds, Buffer::DEFAULT);
@@ -228,7 +230,8 @@ void InitBuffers(Surface* screen) {
 		SCRWIDTH, SCRHEIGHT,
 		camera, p0, p1, p2,
 		clbuf_rays,
-		clbuf_accumulator
+		clbuf_accumulator,
+		clbuf_clr
 	);
 	//extendKernel->SetArguments(
 	//	clbuf_tris, N,
@@ -263,7 +266,8 @@ void InitBuffers(Surface* screen) {
 		clbuf_pixels,
 		clbuf_accumulator,
 		SCRWIDTH * SCRHEIGHT,
-		SAMPLES_PER_PIXEL
+		SAMPLES_PER_PIXEL,
+		clbuf_clr
 	);
 
 	clbuf_tris->CopyToDevice();
@@ -286,60 +290,47 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 	screen->Clear(0);
 
 	Timer t;
+	const int maxDepth = 10;
+	for (int j = 0; j < SAMPLES_PER_PIXEL; j++) {
+		activeRays = SCRWIDTH * SCRHEIGHT;
+		//const int lowerRayBound = activeRays / 100;
 
-	activeRays = SCRWIDTH * SCRHEIGHT * SAMPLES_PER_PIXEL;
-	//const int lowerRayBound = activeRays / 100;
-	const int maxDepth = 20;
+		generateKernel->Run(SCRWIDTH * SCRHEIGHT);
+		extendKernel->SetArgument(6, clbuf_rays);
+		shadeKernel->SetArgument(0, clbuf_rays);
+		shadeKernel->SetArgument(3, clbuf_new_rays);
+		int i;
+		
+			for (i = 0; i < maxDepth; i++) {
+				int activeThreads = activeRays;
+				activeRays = 0;
 
-	generateKernel->Run(activeRays);
-	extendKernel->SetArgument(6, clbuf_rays);
-	shadeKernel->SetArgument(0, clbuf_rays);
-	shadeKernel->SetArgument(3, clbuf_new_rays);
-	int i;
-	for (i = 0; i < maxDepth; i++) {
-		//extendKernel->SetArguments(
-		//	clbuf_tris, N,
-		//	clbuf_spheres, NS,
-		//	clbuf_mat_tris, clbuf_mat_spheres,
-		//	clbuf_rays,
-		//	clbuf_hits
-		//);
-		//shadeKernel->SetArguments(
-		//	clbuf_rays,
-		//	clbuf_hits,
-		//	clbuf_new_rays,
-		//	clbuf_active_rays,
-		//	clbuf_accumulator
-		//);
+				extendKernel->Run(activeThreads);
 
-		int activeThreads = activeRays;
-		activeRays = 0;
+				clbuf_active_rays->CopyToDevice();
 
-		extendKernel->Run(activeThreads);
+				shadeKernel->Run(activeThreads);
+				clbuf_active_rays->CopyFromDevice();
 
-		clbuf_active_rays->CopyToDevice();
+				//if (clbuf_active_rays == 0) {
+				//	break;
+				//}
+				//printf("Active rays: %d\n", activeRays);
+				if (i % 2 == 0) {
+					extendKernel->SetArgument(6, clbuf_new_rays);
+					shadeKernel->SetArgument(0, clbuf_new_rays);
+					shadeKernel->SetArgument(3, clbuf_rays);
+				}
+				else {
+					extendKernel->SetArgument(6, clbuf_rays);
+					shadeKernel->SetArgument(0, clbuf_rays);
+					shadeKernel->SetArgument(3, clbuf_new_rays);
+				}
+			}
 
-		shadeKernel->Run(activeThreads);
-		clbuf_active_rays->CopyFromDevice();
+			//cout << activeRays << endl;
 
-		//if (clbuf_active_rays == 0) {
-		//	break;
-		//}
-		//printf("Active rays: %d\n", activeRays);
-		if (i % 2 == 0) {
-			extendKernel->SetArgument(6, clbuf_new_rays);
-			shadeKernel->SetArgument(0, clbuf_new_rays);
-			shadeKernel->SetArgument(3, clbuf_rays);
-		}
-		else {
-			extendKernel->SetArgument(6, clbuf_rays);
-			shadeKernel->SetArgument(0, clbuf_rays);
-			shadeKernel->SetArgument(3, clbuf_new_rays);
-		}
-
-		//cout << activeRays << endl;
-
-		//swap(clbuf_rays, clbuf_new_rays);
+			//swap(clbuf_rays, clbuf_new_rays);
 	}
 	//if (i % 2 == 1) {
 	//	swap(clbuf_rays, clbuf_new_rays);

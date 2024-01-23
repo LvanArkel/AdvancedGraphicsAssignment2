@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 //#define ANALYZE_RESULTS
 
 #define N	10 // triangle count
-#define SPHERE_AMT 20
+#define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 #define SAMPLES_PER_PIXEL 20
 
@@ -37,6 +37,7 @@ static Buffer* clbuf_tris = 0; // buffer for triangles
 static Buffer* clbuf_mat_sphere = 0; // buffer for sphere materials
 static Buffer* clbuf_mat_tri = 0; // buffer for sphere materials
 static Buffer* clbuf_test_cl = 0; // buffer for sphere materials
+static Buffer* clbuf_rand_seed = 0;
 
 //SOA
 //int cl_r[SCRWIDTH * SCRHEIGHT]; //color r channel sent to kernel
@@ -44,6 +45,7 @@ static Buffer* clbuf_test_cl = 0; // buffer for sphere materials
 //int cl_b[SCRWIDTH * SCRHEIGHT]; //color b channel sent to kernel
 
 int cl_rgb[SCRWIDTH * SCRHEIGHT];
+uint seeds[SCRWIDTH * SCRHEIGHT];
 
 const float WALL_SIZE = 10.0;
 const float3 camera(0, 0, -(2 * WALL_SIZE));
@@ -439,8 +441,24 @@ void InitCPU() {
 }
 #endif
 #ifdef GPGPU
+
+uint WangHash(uint s)
+{
+	s = (s ^ 61) ^ (s >> 16);
+	s *= 9, s = s ^ (s >> 4);
+	s *= 0x27d4eb2d;
+	s = s ^ (s >> 15);
+	return s;
+}
+
+void InitSeeds() {
+	for (int i = 0; i < SCRWIDTH * SCRHEIGHT; i++) {
+		seeds[i] = WangHash((i + 1) * 17);
+	}
+}
+
 void InitSpheres() {
-	const float S_R = 0.3f;
+	const float S_R = 0.8f;
 	const float offset = 1.0f;
 	int i = 0;
 	for (int z = 0; z < SPHERE_AMT; z++) {
@@ -600,7 +618,7 @@ void InitOpenCL(Surface* screen) {
 	timefile << "frameidx," << "time," << "rays" << "\n";
 	timefile.close();
 #endif
-
+	InitSeeds();
 	InitSpheres();
 	InitTris();
 
@@ -619,8 +637,10 @@ void InitOpenCL(Surface* screen) {
 		clbuf_tris = new Buffer(N * sizeof(Tri), tri, Buffer::DEFAULT);
 		clbuf_mat_sphere = new Buffer(NS * sizeof(DiffuseMat), sphereMaterials, Buffer::DEFAULT);
 		clbuf_mat_tri = new Buffer(N * sizeof(DiffuseMat), diffuseMaterials, Buffer::DEFAULT);
+		clbuf_rand_seed = new Buffer(SCRWIDTH * SCRHEIGHT * sizeof(uint), seeds, Buffer::DEFAULT);
+
 	}
-	kernel->SetArguments(clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2, clbuf_test_cl);
+	kernel->SetArguments(clbuf_spheres, clbuf_tris, clbuf_mat_sphere, clbuf_mat_tri, SCRWIDTH, SCRHEIGHT, SAMPLES_PER_PIXEL, camera, p0, p1, p2, clbuf_test_cl, clbuf_rand_seed);
 	//clbuf_r->CopyToDevice();
 	//clbuf_g->CopyToDevice();
 	//clbuf_b->CopyToDevice();
@@ -628,6 +648,7 @@ void InitOpenCL(Surface* screen) {
 	clbuf_tris->CopyToDevice();
 	clbuf_mat_sphere->CopyToDevice();
 	clbuf_mat_tri->CopyToDevice();
+	clbuf_rand_seed->CopyToDevice();
 
 }
 #endif
@@ -636,6 +657,7 @@ void InitOpenCL(Surface* screen) {
 void Assignment2MegakernelApp::Init()
 {
 #ifdef GPGPU
+
 	InitOpenCL(screen);
 #endif
 #ifdef CPU

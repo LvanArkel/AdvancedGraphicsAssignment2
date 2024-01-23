@@ -45,9 +45,6 @@ __kernel void shade(
 ) {
     int threadIdx = get_global_id(0);
 
-    uint seed = seeds[threadIdx];
-
-
     struct Ray ray = rays[threadIdx];
     struct Hit hit = hits[threadIdx];
 
@@ -66,14 +63,38 @@ __kernel void shade(
             accumulators[ray.startThreadId].y *= hit.material.albedoY;
             accumulators[ray.startThreadId].z *= hit.material.albedoZ;
             accumulators[ray.startThreadId].a = 1.0f;
+
+            // accumulators[ray.startThreadId].x = 0.0f;
+            // accumulators[ray.startThreadId].y = 0.0f;
+            // accumulators[ray.startThreadId].z = 0.0f;
+            // accumulators[ray.startThreadId].a = 1.0f;
             return;
         }
+        // else if(hit.type == HIT_TRIANGLE){
+        //     accumulators[ray.startThreadId].x = 1.0f;
+        //     accumulators[ray.startThreadId].y = 0.0f;
+        //     accumulators[ray.startThreadId].z = 0.0f;
+        //     return;
+        // }
+        // else if(hit.type == HIT_SPHERE){
+        //     accumulators[ray.startThreadId].x = 0.0f;
+        //     accumulators[ray.startThreadId].y = 1.0f;
+        //     accumulators[ray.startThreadId].z = 0.0f;
+        //     return;
+        // }
+        // else{
+        //     accumulators[ray.startThreadId].x = 0.0f;
+        //     accumulators[ray.startThreadId].y = 0.0f;
+        //     accumulators[ray.startThreadId].z = 1.0f;
+        // }
+
+
 
         //TODO: Add randomness
         float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
         float3 N = normalize(hit_normal);
         uint seed =  seeds[threadIdx];
-        seeds[threadIdx] = seed;
+
         float3 newRayD = UniformSampleHemisphere(N, &seed);
         struct Ray newRay;
         SetRayD(&newRay, newRayD);
@@ -92,6 +113,7 @@ __kernel void shade(
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;
+        seeds[threadIdx] = seed;
     } else {
         // accumulators[3*ray.startThreadId] = 0.0f;
         // accumulators[3*ray.startThreadId+1] = 0.0f;

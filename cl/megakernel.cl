@@ -46,7 +46,7 @@ struct Hit {
 // __constant int N = 12; //number of tris
 // __constant int NS = 3; //number of spheres
 __constant int N = 10; // triangle count
-__constant int SPHERE_AMT = 20;
+__constant int SPHERE_AMT = 5;
 __constant int NS = (SPHERE_AMT*SPHERE_AMT+1);
 ////
 //FUNCTIONS
@@ -183,7 +183,7 @@ float3 Sample(struct Ray* ray, __global struct Sphere* spheres, __global struct 
 	float3 newSample = (float3)(1.0, 1.0, 1.0);
 	int depth = 0;
 	while (true) {
-		if (depth >= 20) {
+		if (depth >= 10) {
 			return (float3)(0.0f);
 		}
 
@@ -269,14 +269,14 @@ __kernel void render(
 					__global struct DiffuseMat* sphereMaterials, __global struct DiffuseMat* triMaterials,
                     const int image_width, const int image_height, const int SAMPLES_PER_PIXEL, 
                     float3 camPos, float3 p0, float3 p1, float3 p2, 
-					__global int* rgb ){
+					__global int* rgb, __global uint *seeds){
 
     int threadIdx = get_global_id(0);
 
 	if (threadIdx >= image_width * image_height) return;
 	int x = threadIdx % image_width;
 	int y = threadIdx / image_width;
-	uint seed =  WangHash( (threadIdx+1)*17 );
+	uint seed =  seeds[threadIdx];//WangHash( (threadIdx+1)*17 );
 
     struct Ray ray;
 
@@ -323,6 +323,7 @@ __kernel void render(
     // r[threadIdx] = (int)(min(color[0], 1.0f) * 255.0);
     // g[threadIdx] = (int)(min(color[1], 1.0f) * 255.0);
     // b[threadIdx] = (int)(min(color[2], 1.0f) * 255.0);
+	seeds[threadIdx] = seed;
 	int ri = (int)(min(1.0f, color.x) * 255.0);
     int gi = (int)(min(1.0f, color.y) * 255.0);
     int bi = (int)(min(1.0f, color.z) * 255.0);
