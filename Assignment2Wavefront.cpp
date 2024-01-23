@@ -20,7 +20,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 //#define N 12
 //#define NS 2
-#define SAMPLES_PER_PIXEL 40
+#define SAMPLES_PER_PIXEL 80
 //#define USE_NEE
 
 // forward declarations
@@ -285,6 +285,7 @@ void InitBuffers(Surface* screen) {
 	clbuf_mat_tris->CopyToDevice();
 	clbuf_spheres->CopyToDevice();
 	clbuf_mat_spheres->CopyToDevice();
+	clbuf_light_spheres->CopyToDevice();
 	clbuf_rand_seed->CopyToDevice();
 }
 

@@ -57,7 +57,7 @@ struct LightCheck SampleRandomLight(
     lightCheck.L = normalize(intersectDirection);
     lightCheck.Nl = Nl;
     lightCheck.dist = length(intersectDirection);
-    lightCheck.A = 4*M_PI_F * selectedSphere.radius * selectedSphere.radius;
+    lightCheck.A = 4.0f * M_PI_F * selectedSphere.radius * selectedSphere.radius;
 
     return lightCheck;
 }
@@ -109,21 +109,20 @@ __kernel void shade(
         float3 brdf = MaterialAlbedo(&hit.material) * M_1_PI_F;
         // Sample random light
         struct LightCheck lightCheck = SampleRandomLight(&seed, lightSphereSize, lightSpheres, spheres, I);
-        float solidAngle = (dot(lightCheck.Nl, -lightCheck.L) * lightCheck.A) / (lightCheck.dist * lightCheck.dist);
-        float lightPdf = 1.0f / solidAngle;
-        float3 T = (float)(Ts[3*ray.startThreadId], Ts[3*ray.startThreadId+1], Ts[3*ray.startThreadId+2]);
-        float3 deltaE = T * (dot (N, lightCheck.L) / lightPdf) * brdf * MaterialAlbedo(&sphereMaterials[lightCheck.sphereIndex]);
-        struct ShadowRay shadowRay;
-        SetRayO(&shadowRay.ray, I);
-        SetRayD(&shadowRay.ray, lightCheck.L);
-        shadowRay.ray.t = lightCheck.dist;
-        shadowRay.ray.startThreadId = ray.startThreadId;
         if (dot(N, lightCheck.L) > 0 && dot( lightCheck.Nl, -lightCheck.L) > 0) {
+            float solidAngle = (dot(lightCheck.Nl, -lightCheck.L) * lightCheck.A) / (lightCheck.dist * lightCheck.dist);
+            float lightPdf = 1.0f / solidAngle;
+            float3 T = (float)(Ts[3*ray.startThreadId], Ts[3*ray.startThreadId+1], Ts[3*ray.startThreadId+2]);
+            float3 deltaE = T * (dot (N, lightCheck.L) / lightPdf) * brdf * MaterialAlbedo(&sphereMaterials[lightCheck.sphereIndex]);
+            struct ShadowRay shadowRay;
+            SetRayO(&shadowRay.ray, I);
+            SetRayD(&shadowRay.ray, lightCheck.L);
+            shadowRay.ray.t = lightCheck.dist;
+            shadowRay.ray.startThreadId = ray.startThreadId;
             SetShadowRayDE(&shadowRay, deltaE);
-        } else {
-            SetShadowRayDE(&shadowRay, (float3)(0.0f, 0.0f, 0.0f));
+            shadowRays[atomic_inc(shadowRayCounter)] = shadowRay;
         }
-        shadowRays[atomic_inc(shadowRayCounter)] = shadowRay;
+        
 
         // Continue random walk
         float3 newRayD = UniformSampleHemisphere(N, &seed);
