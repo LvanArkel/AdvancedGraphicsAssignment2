@@ -5,9 +5,13 @@ __kernel void generate(
     float3 camPos, float3 p0, float3 p1, float3 p2,
     __global struct Ray* rays,
     __global float4* accumulators,
-    __global float4* clr
+    __global float4* clr,
+    __global uint *rayCount,
+    __global uint *newRayCount
 ) {
     int threadIdx = get_global_id(0);
+    *rayCount = image_width * image_height;
+    *newRayCount = 0;
 
     int x = threadIdx % image_width;
     int y = (threadIdx / image_width) % (image_height);

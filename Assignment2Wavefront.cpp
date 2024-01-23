@@ -66,7 +66,6 @@ int sphereLightSize;
 uint sphereLights[NS];
 
 uint seeds[rayBufferSize];
-uint activeRays = 0;
 
 static Kernel* generateKernel;
 static Kernel* extendKernel;
@@ -89,6 +88,7 @@ static Buffer* clbuf_pixels;
 static Buffer* clbuf_rand_seed = 0;
 
 static Buffer* clbuf_active_rays;
+static Buffer* clbuf_new_ray_count;
 
 
 uint WangHash(uint s)
@@ -218,7 +218,8 @@ void InitBuffers(Surface* screen) {
 	clbuf_hits = new Buffer(rayBufferSize * GPUHitByteSize);
 	clbuf_new_rays = new Buffer(rayBufferSize * GPURayByteSize);
 
-	clbuf_active_rays = new Buffer(sizeof(uint), &activeRays, Buffer::DEFAULT);
+	clbuf_active_rays = new Buffer(sizeof(uint));
+	clbuf_new_ray_count = new Buffer(sizeof(uint));
 
 	clbuf_accumulator = new Buffer(rayBufferSize * 4 * sizeof(float));
 	clbuf_clr = new Buffer(SCRWIDTH * SCRHEIGHT * 4 * sizeof(cl_float));
@@ -231,7 +232,9 @@ void InitBuffers(Surface* screen) {
 		camera, p0, p1, p2,
 		clbuf_rays,
 		clbuf_accumulator,
-		clbuf_clr
+		clbuf_clr,
+		clbuf_active_rays,
+		clbuf_new_ray_count
 	);
 	//extendKernel->SetArguments(
 	//	clbuf_tris, N,
@@ -252,7 +255,9 @@ void InitBuffers(Surface* screen) {
 		clbuf_spheres, NS,
 		clbuf_mat_tris, clbuf_mat_spheres,
 		clbuf_rays,
-		clbuf_hits
+		clbuf_hits,
+		clbuf_active_rays,
+		clbuf_new_ray_count
 	);
 	shadeKernel->SetArguments(
 		clbuf_rays,
@@ -260,6 +265,7 @@ void InitBuffers(Surface* screen) {
 		clbuf_rand_seed,
 		clbuf_new_rays,
 		clbuf_active_rays,
+		clbuf_new_ray_count,
 		clbuf_accumulator
 	);
 	finalizeKernel->SetArguments(
@@ -292,25 +298,24 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 	Timer t;
 	const int maxDepth = 10;
 	for (int j = 0; j < SAMPLES_PER_PIXEL; j++) {
-		activeRays = SCRWIDTH * SCRHEIGHT;
-		//const int lowerRayBound = activeRays / 100;
 
-		generateKernel->Run(SCRWIDTH * SCRHEIGHT);
+		//const int lowerRayBound = activeRays / 100;
+		int totalThreads = SCRWIDTH * SCRHEIGHT;
+
+		generateKernel->Run(totalThreads);
 		extendKernel->SetArgument(6, clbuf_rays);
 		shadeKernel->SetArgument(0, clbuf_rays);
 		shadeKernel->SetArgument(3, clbuf_new_rays);
 		int i;
 		
 			for (i = 0; i < maxDepth; i++) {
-				int activeThreads = activeRays;
-				activeRays = 0;
 
-				extendKernel->Run(activeThreads);
+				extendKernel->Run(totalThreads);
 
-				clbuf_active_rays->CopyToDevice();
+				//clbuf_active_rays->CopyToDevice();
 
-				shadeKernel->Run(activeThreads);
-				clbuf_active_rays->CopyFromDevice();
+				shadeKernel->Run(totalThreads);
+				//clbuf_active_rays->CopyFromDevice();
 
 				//if (clbuf_active_rays == 0) {
 				//	break;

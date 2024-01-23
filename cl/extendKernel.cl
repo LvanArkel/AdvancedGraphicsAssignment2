@@ -101,9 +101,27 @@ __kernel void extend(
     __global struct Sphere* spheres, const int NSpheres,
     __global struct Material* triangleMaterials, __global struct Material* sphereMaterials,
     __global struct Ray* rays,
-    __global struct Hit* hits
+    __global struct Hit* hits,
+	__global volatile int *rayCount,
+	__global volatile int *newRayCount
+	// Initial presumptions
+	// rayCount != 0 -> Don't swap
+	// rayCount == 0 -> rayCount = newRaycount; newRayCount = 0;
 ) {
+	if (*rayCount == 0 && *newRayCount == 0) {
+		return;
+	}
+
+	// if (rayCount == 0) swap(raycount, newraycount)
+	if (atomic_cmpxchg(rayCount, 0, *newRayCount) == 0) {
+		*newRayCount = 0;
+	}
+
     int threadIdx = get_global_id(0);
+	if (threadIdx >= *rayCount) {
+		return;
+	}
+
     struct Ray* ray = &rays[threadIdx];
 
     hits[threadIdx] = Trace(
