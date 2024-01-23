@@ -13,12 +13,14 @@
 
 TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 
+#define ANALYZE_RESULTS
+
 // triangle count
 #define N	10
 #define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 
-#define SAMPLES_PER_PIXEL 200
+#define SAMPLES_PER_PIXEL 10
 //#define USE_NEE
 
 // forward declarations
@@ -290,26 +292,44 @@ void Assignment2WavefrontApp::Init()
 	InitBuffers(screen);
 }
 
+int runs = 0;
+int runbatch = 20;
+float totelapsed = 0;
+int smp = 5;
+
+ofstream timefile;
+const string filename = "analyze_wavefront_depth.csv";
+
 void Assignment2WavefrontApp::Tick(float deltaTime)
 {
 	// draw the scene
 	screen->Clear(0);
 
 	Timer t;
-	const int maxDepth = 10;
+	const int maxDepth = 8;
+	int totalThreads = SCRWIDTH * SCRHEIGHT;
+
+
 	for (int j = 0; j < SAMPLES_PER_PIXEL; j++) {
 
 		//const int lowerRayBound = activeRays / 100;
-		int totalThreads = SCRWIDTH * SCRHEIGHT;
 
 		generateKernel->Run(totalThreads);
-		extendKernel->SetArgument(6, clbuf_rays);
-		shadeKernel->SetArgument(0, clbuf_rays);
-		shadeKernel->SetArgument(3, clbuf_new_rays);
+
 		int i;
 		
-			for (i = 0; i < maxDepth; i++) {
+			for (i = 0; i < smp; i++) {
 
+				if (i % 2 == 1) {
+					extendKernel->SetArgument(6, clbuf_new_rays);
+					shadeKernel->SetArgument(0, clbuf_new_rays);
+					shadeKernel->SetArgument(3, clbuf_rays);
+				}
+				else {
+					extendKernel->SetArgument(6, clbuf_rays);
+					shadeKernel->SetArgument(0, clbuf_rays);
+					shadeKernel->SetArgument(3, clbuf_new_rays);
+				}
 				extendKernel->Run(totalThreads);
 
 				//clbuf_active_rays->CopyToDevice();
@@ -321,16 +341,7 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 				//	break;
 				//}
 				//printf("Active rays: %d\n", activeRays);
-				if (i % 2 == 0) {
-					extendKernel->SetArgument(6, clbuf_new_rays);
-					shadeKernel->SetArgument(0, clbuf_new_rays);
-					shadeKernel->SetArgument(3, clbuf_rays);
-				}
-				else {
-					extendKernel->SetArgument(6, clbuf_rays);
-					shadeKernel->SetArgument(0, clbuf_rays);
-					shadeKernel->SetArgument(3, clbuf_new_rays);
-				}
+
 			}
 
 			//cout << activeRays << endl;
@@ -349,6 +360,25 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 
 	float elapsed = t.elapsed() * 1000;
 	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
+
+#ifdef ANALYZE_RESULTS
+	totelapsed += elapsed;
+	runs++;
+	if (runs % runbatch == 0) {
+		//int maxDepth = 0;
+		float average_time = totelapsed / runbatch;
+		timefile.open(filename.c_str(), std::ios_base::app);
+		timefile << smp << "," << average_time << "," << sqr(630) / average_time << "\n";
+		timefile.close();
+
+		smp += 5;
+		//clbuf_maxdepth->CopyToDevice();
+
+		totelapsed = 0;
+	}
+
+	//frameidx++;
+#endif
 }
 
 // EOF
