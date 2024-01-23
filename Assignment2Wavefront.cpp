@@ -18,7 +18,7 @@ TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 #define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 
-#define SAMPLES_PER_PIXEL 50
+#define SAMPLES_PER_PIXEL 200
 //#define USE_NEE
 
 // forward declarations
@@ -163,7 +163,7 @@ void initSpheres() {
 void initLights() {
 	// Lamp
 	const float L_R = 4.0f;
-	const float L_I = 4.0f;
+	const float L_I = 6.0f;
 	spheres[NS-1] = { 0.0f, WALL_SIZE, 0.0f, L_R };
 	sphereMaterials[NS-1] = { MaterialType::LIGHT, L_I, L_I, L_I};
 	/*const float L_S = 4.0f;

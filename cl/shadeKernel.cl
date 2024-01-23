@@ -44,14 +44,14 @@ __kernel void shade(
     __global volatile uint *newRayCounter,
     __global float4 *accumulators
 ) {
-    int threadIdx = get_global_id(0);
-    if (atomic_dec(rayCount) <= 0) {
+    int rayIdx = atomic_dec(rayCount) - 1;
+    if (rayIdx < 0) {
         atomic_max(rayCount, 0);
         return;
     }
 
-    struct Ray ray = rays[threadIdx];
-    struct Hit hit = hits[threadIdx];
+    struct Ray ray = rays[rayIdx];
+    struct Hit hit = hits[rayIdx];
 
     if (hit.type != HIT_NOHIT) {
         if (hit.material.type == MAT_LIGHT) {
@@ -67,7 +67,7 @@ __kernel void shade(
         //TODO: Add randomness
         float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
         float3 N = normalize(hit_normal);
-        uint seed =  seeds[threadIdx];
+        uint seed =  seeds[rayIdx];
 
         float3 newRayD = UniformSampleHemisphere(N, &seed);
         struct Ray newRay;
@@ -83,7 +83,7 @@ __kernel void shade(
 
         // Send extension ray
         newRays[atomic_inc(newRayCounter)] = newRay;
-        seeds[threadIdx] = seed;
+        seeds[rayIdx] = seed;
     } else {
         accumulators[ray.startThreadId] = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
     }
