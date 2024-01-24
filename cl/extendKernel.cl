@@ -33,7 +33,6 @@ void IntersectTri(struct Ray* ray, struct Tri* tri )
 	float3 q = cross( s, edge1 );
 	float v = f * dot( rayD, q );
 	if (v < 0 || u + v > 1) return;
-    //ray->t = 0.0;
 	float t = f * dot( edge2, q );
 	if (t > 0.0001f) ray->t = min( ray->t, t );
 }
@@ -104,15 +103,11 @@ __kernel void extend(
     __global struct Hit* hits,
 	__global volatile int *rayCount,
 	__global volatile int *newRayCount
-	// Initial presumptions
-	// rayCount != 0 -> Don't swap
-	// rayCount == 0 -> rayCount = newRaycount; newRayCount = 0;
 ) {
 	if (*rayCount == 0 && *newRayCount == 0) {
 		return;
 	}
 
-	// if (rayCount == 0) swap(raycount, newraycount)
 	if (atomic_cmpxchg(rayCount, 0, *newRayCount) == 0) {
 		*newRayCount = 0;
 	}

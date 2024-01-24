@@ -33,12 +33,8 @@ __kernel void generate(
         clr[threadIdx].y += accumulators[threadIdx].y;
         clr[threadIdx].z += accumulators[threadIdx].z;
     }
-    accumulators[threadIdx].x = 1.0f;// = (float4)(1.0f, 1.0f, 1.0f, 0.0f);
+    accumulators[threadIdx].x = 1.0f;
     accumulators[threadIdx].y = 1.0f;
-    accumulators[threadIdx].z = 1.0f;//
+    accumulators[threadIdx].z = 1.0f;
     accumulators[threadIdx].a = 0.0f;
-
-    // accumulators[3*threadIdx] = 1.0f;
-    // accumulators[3*threadIdx+1] = 1.0f;
-    // accumulators[3*threadIdx+2] = 1.0f;
 }

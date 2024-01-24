@@ -8,18 +8,10 @@
 
 TheApp* CreateApp() { return new Assignment2MegakernelApp(); }
 
-#define ANALYZE_RESULTS
-
-#define N	10 // triangle count
-#define SPHERE_AMT 5
+#define N	10 // triangle count  <-- adjust in megakernel.cl as well
+#define SPHERE_AMT 5 //<<-adjust this value in megakernel.cl as well
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
-#define SAMPLES_PER_PIXEL 10
-
-#ifdef ANALYZE_RESULTS
-ofstream timefile;
-const string filename = "analyze_megakernel_samples.csv";
-//uint frameidx = 0;
-#endif
+#define SAMPLES_PER_PIXEL 200
 
 static Kernel* kernel = 0; //megakernel
 static Buffer* clbuf_spheres = 0; // buffer for spheres
@@ -201,26 +193,16 @@ void InitOpenCL(Surface* screen) {
 
 void Assignment2MegakernelApp::Init()
 {
-//#ifdef ANALYZE_RESULTS
-//	timefile.open(filename.c_str());
-//	timefile << "depth," << "time," << "rays" << "\n";
-//	timefile.close();
-//#endif
 	InitOpenCL(screen);
 }
 
-
-int runs = 0;
-int runbatch = 20;
-float totelapsed = 0;
-int smp = 5;
 void Assignment2MegakernelApp::TickOpenCL() {
 	// draw the scene
 	screen->Clear(0);
 
 	Timer t;
 
-	for (int i = 0; i < smp; i++) {
+	for (int i = 0; i < SAMPLES_PER_PIXEL; i++) {
 		kernel->Run(SCRWIDTH * SCRHEIGHT);
 	}
 
@@ -228,7 +210,7 @@ void Assignment2MegakernelApp::TickOpenCL() {
 
 	for (int i = 0; i < SCRWIDTH * SCRHEIGHT; i++) {
 		float3 color = float3(cl_accumulator[i].x, cl_accumulator[i].y, cl_accumulator[i].z);
-		color /= smp;
+		color /= SAMPLES_PER_PIXEL;
 
 		int ri = int(min(1.0f, color.x) * 255.0f);
 		int gi = int(min(1.0f, color.y) * 255.0f);
@@ -244,29 +226,8 @@ void Assignment2MegakernelApp::TickOpenCL() {
 
 	clbuf_accumulator->CopyToDevice();
 
-
-
 	float elapsed = t.elapsed() * 1000;
 	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
-
-	totelapsed += elapsed;
-	runs++;
-#ifdef ANALYZE_RESULTS
-	if (runs % runbatch == 0) {
-		//int maxDepth = 0;
-		float average_time = totelapsed / runbatch;
-		timefile.open(filename.c_str(), std::ios_base::app);
-		timefile << smp << "," << average_time << "," << sqr(630) / average_time << "\n";
-		timefile.close();
-
-		smp += 5;
-		//clbuf_maxdepth->CopyToDevice();
-
-		totelapsed = 0;
-	}
-
-	//frameidx++;
-#endif
 }
 
 void Assignment2MegakernelApp::Tick(float deltaTime)

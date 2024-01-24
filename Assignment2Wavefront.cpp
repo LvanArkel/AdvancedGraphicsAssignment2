@@ -13,15 +13,12 @@
 
 TheApp* CreateApp() { return new Assignment2WavefrontApp(); }
 
-#define ANALYZE_RESULTS
-
 // triangle count
 #define N	10
 #define SPHERE_AMT 5
 #define NS (SPHERE_AMT*SPHERE_AMT+1)
 
-#define SAMPLES_PER_PIXEL 10
-//#define USE_NEE
+#define SAMPLES_PER_PIXEL 200
 
 // forward declarations
 
@@ -238,19 +235,6 @@ void InitBuffers(Surface* screen) {
 		clbuf_active_rays,
 		clbuf_new_ray_count
 	);
-	//extendKernel->SetArguments(
-	//	clbuf_tris, N,
-	//	clbuf_spheres, NS,
-	//	clbuf_mat_tris, clbuf_mat_spheres,
-	//	clbuf_rays,
-	//	clbuf_hits
-	//);
-	//shadeKernel->SetArguments(
-	//	clbuf_rays,
-	//	clbuf_hits,
-	//	clbuf_rand_seed,
-	//	clbuf_accumulator
-	//);
 
 	extendKernel->SetArguments(
 		clbuf_tris, N,
@@ -292,14 +276,6 @@ void Assignment2WavefrontApp::Init()
 	InitBuffers(screen);
 }
 
-int runs = 0;
-int runbatch = 20;
-float totelapsed = 0;
-int smp = 5;
-
-ofstream timefile;
-const string filename = "analyze_wavefront_depth.csv";
-
 void Assignment2WavefrontApp::Tick(float deltaTime)
 {
 	// draw the scene
@@ -311,14 +287,11 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 
 
 	for (int j = 0; j < SAMPLES_PER_PIXEL; j++) {
-
-		//const int lowerRayBound = activeRays / 100;
-
 		generateKernel->Run(totalThreads);
 
 		int i;
 		
-			for (i = 0; i < smp; i++) {
+			for (i = 0; i < maxDepth; i++) {
 
 				if (i % 2 == 1) {
 					extendKernel->SetArgument(6, clbuf_new_rays);
@@ -332,53 +305,17 @@ void Assignment2WavefrontApp::Tick(float deltaTime)
 				}
 				extendKernel->Run(totalThreads);
 
-				//clbuf_active_rays->CopyToDevice();
-
 				shadeKernel->Run(totalThreads);
-				//clbuf_active_rays->CopyFromDevice();
-
-				//if (clbuf_active_rays == 0) {
-				//	break;
-				//}
-				//printf("Active rays: %d\n", activeRays);
 
 			}
 
-			//cout << activeRays << endl;
-
-			//swap(clbuf_rays, clbuf_new_rays);
 	}
-	//if (i % 2 == 1) {
-	//	swap(clbuf_rays, clbuf_new_rays);
-	//}
-	//cout << activeRays << endl;
-
 
 	finalizeKernel->Run(SCRWIDTH * SCRHEIGHT);
 	clbuf_pixels->CopyFromDevice();
 
-
 	float elapsed = t.elapsed() * 1000;
 	printf("tracing time: %.2fms (%5.2fK rays/s)\n", elapsed, sqr(630) / elapsed);
-
-#ifdef ANALYZE_RESULTS
-	totelapsed += elapsed;
-	runs++;
-	if (runs % runbatch == 0) {
-		//int maxDepth = 0;
-		float average_time = totelapsed / runbatch;
-		timefile.open(filename.c_str(), std::ios_base::app);
-		timefile << smp << "," << average_time << "," << sqr(630) / average_time << "\n";
-		timefile.close();
-
-		smp += 5;
-		//clbuf_maxdepth->CopyToDevice();
-
-		totelapsed = 0;
-	}
-
-	//frameidx++;
-#endif
 }
 
 // EOF

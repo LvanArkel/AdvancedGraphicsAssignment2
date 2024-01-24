@@ -62,9 +62,6 @@ __kernel void shade(
             return;
         }
 
-
-
-        //TODO: Add randomness
         float3 hit_normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
         float3 N = normalize(hit_normal);
         uint seed =  seeds[rayIdx];
@@ -87,46 +84,4 @@ __kernel void shade(
     } else {
         accumulators[ray.startThreadId] = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
     }
-
-
-    //return;
-
-    // if (hit.type == HIT_NOHIT) {
-    //     accumulators[3*ray.pixelIdx] *= 0;
-    //     accumulators[3*ray.pixelIdx+1] *= 0;
-    //     accumulators[3*ray.pixelIdx+2] *= 0;
-    //     bounce = false;
-    // } else if (hit.material.type == MAT_LIGHT) {
-    //     accumulators[3*ray.pixelIdx] *= hit.material.albedoX;
-    //     accumulators[3*ray.pixelIdx+1] *= hit.material.albedoY;
-    //     accumulators[3*ray.pixelIdx+2] *= hit.material.albedoZ;
-    //     bounce = false;
-    // } else if (hit.material.type == MAT_DIFFUSE) {
-    //     // Generate new ray
-    //     float3 normal = (float3)(hit.normalX, hit.normalY, hit.normalZ);
-    //     normal = normalize(normal);
-    //     //TODO: Add randomness
-    //     uint seed = threadIdx;
-    //     // Continue in random direction
-    //     float3 newDirection = UniformSampleHemisphere(normal, &seed);
-    //     struct Ray newRay;
-    //     newRay.Ox = ray.Ox + ray.t * ray.Dx;
-    //     newRay.Oy = ray.Oy + ray.t * ray.Dy;
-    //     newRay.Oz = ray.Oz + ray.t * ray.Dz;
-    //     newRay.Dx = newDirection.x;
-    //     newRay.Dy = newDirection.y;
-    //     newRay.Dz = newDirection.z;
-    //     newRay.t = 1e30f;
-    //     newRay.pixelIdx = ray.pixelIdx;
-    //     newRays[atomic_inc(newRayCounter)] = newRay;
-    //     // Update throughput
-    //     float brdfX = M_1_PI * hit.material.albedoX;
-    //     float brdfY = M_1_PI * hit.material.albedoY;
-    //     float brdfZ = M_1_PI * hit.material.albedoZ;
-
-    //     float constFactor = 2.0f * M_PI_F * dot( normal, newDirection);
-    //     accumulators[3*ray.pixelIdx] *= constFactor * brdfX;
-    //     accumulators[3*ray.pixelIdx+1] *= constFactor * brdfY;
-    //     accumulators[3*ray.pixelIdx+2] *= constFactor * brdfZ;
-    // }
 }

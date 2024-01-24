@@ -94,4 +94,3 @@ void SetHitNormal(struct Hit* hit, float3 normal) {
     hit->normalY = normal.y;
     hit->normalZ = normal.z;
 }
-
